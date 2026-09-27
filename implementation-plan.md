@@ -9,11 +9,11 @@
 
 ## Phase 2: Authentication
 
-- [ ] Create login page
-- [ ] Implement login API endpoint
-- [ ] Implement session-based authentication middleware
-- [ ] Implement logout API endpoint
-- [ ] Add route protection on the frontend (redirect to login if unauthenticated)
+- [x] Create login page
+- [x] Implement login API endpoint
+- [x] Implement session-based authentication middleware
+- [x] Implement logout API endpoint
+- [x] Add route protection on the frontend (redirect to login if unauthenticated)
 
 ## Phase 3: User Management
 

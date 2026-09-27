@@ -9,11 +9,14 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "bun --env-file=.env --bun prisma generate",
     "db:migrate": "bun --env-file=.env --bun prisma migrate dev",
-    "db:studio": "bun --env-file=.env --bun prisma studio"
+    "db:studio": "bun --env-file=.env --bun prisma studio",
+    "auth:generate": "bun --env-file=.env x --bun auth@1.7.6 generate --config src/auth.ts --output prisma/schema.prisma --yes",
+    "make-admin": "bun scripts/make-admin.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
+    "better-auth": "1.7.6",
     "express": "^5.2.1"
   },
   "devDependencies": {
