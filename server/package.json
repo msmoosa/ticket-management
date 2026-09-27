@@ -6,14 +6,20 @@
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "bun --env-file=.env --bun prisma generate",
+    "db:migrate": "bun --env-file=.env --bun prisma migrate dev",
+    "db:studio": "bun --env-file=.env --bun prisma studio"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
     "express": "^5.2.1"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",
     "@types/express": "^5.0.6",
+    "prisma": "7.10.0",
     "typescript": "^7.0.2"
   }
 }

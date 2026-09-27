@@ -15,10 +15,10 @@ afterAll(() => {
   server.close();
 });
 
-test("GET /api/health returns ok", async () => {
+test("GET /api/health reports API and database ok", async () => {
   const res = await fetch(`${baseUrl}/api/health`);
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ status: "ok" });
+  expect(await res.json()).toEqual({ status: "ok", database: "ok" });
 });
 
 test("unknown route returns 404 JSON", async () => {

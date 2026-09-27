@@ -5,15 +5,17 @@ AI-powered support ticket management. See [project-scope.md](project-scope.md), 
 ## Structure
 
 - `client/` — React + TypeScript + Vite + Tailwind CSS + React Router
-- `server/` — Express + TypeScript, running on Bun
+- `server/` — Express + TypeScript, running on Bun, with Prisma 7 + PostgreSQL
 
 ## Getting started
 
-Requires [Bun](https://bun.sh).
+Requires [Bun](https://bun.sh) and PostgreSQL.
 
 ```sh
 bun install
-cp server/.env.example server/.env
+createdb helpdesk
+cp server/.env.example server/.env   # then set DATABASE_URL
+bun run --filter server db:generate  # generate the Prisma client
 bun run dev        # client on http://localhost:5173, API on http://localhost:3000
 ```
 

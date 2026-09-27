@@ -16,3 +16,8 @@ Build a ticket management system that uses AI to automatically classify, respond
 - AI-suggested replies
 - User management (admin only)
 - Dashboard to view and manage all tickets
+
+## Ticket statuses 
+- Open
+- Resolved
+- Closed
