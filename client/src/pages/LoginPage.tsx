@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate, type Location } from "react-router";
+import { useLocation, useNavigate, type Location } from "react-router";
 import { authClient } from "../lib/auth-client.ts";
 
 export default function LoginPage() {
@@ -59,12 +59,6 @@ export default function LoginPage() {
           {submitting ? "Signing in…" : "Sign in"}
         </button>
       </form>
-      <p className="text-sm">
-        No account?{" "}
-        <Link to="/signup" className="text-blue-700 underline">
-          Sign up
-        </Link>
-      </p>
     </div>
   );
 }

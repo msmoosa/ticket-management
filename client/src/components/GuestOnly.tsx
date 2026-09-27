@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation, type Location } from "react-router";
 import { authClient } from "../lib/auth-client.ts";
 
-// Wraps /login and /signup: signed-in users are sent back where they came from.
+// Wraps /login: signed-in users are sent back where they came from.
 export default function GuestOnly() {
   const { data: session, isPending } = authClient.useSession();
   const location = useLocation();

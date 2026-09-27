@@ -5,7 +5,6 @@ import { authClient } from "./lib/auth-client.ts";
 import HomePage from "./pages/HomePage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import NotFoundPage from "./pages/NotFoundPage.tsx";
-import SignUpPage from "./pages/SignUpPage.tsx";
 
 export default function App() {
   const { data: session } = authClient.useSession();
@@ -41,7 +40,6 @@ export default function App() {
         <Routes>
           <Route element={<GuestOnly />}>
             <Route path="login" element={<LoginPage />} />
-            <Route path="signup" element={<SignUpPage />} />
           </Route>
           <Route element={<RequireAuth />}>
             <Route index element={<HomePage />} />

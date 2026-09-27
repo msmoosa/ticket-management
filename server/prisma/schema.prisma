@@ -8,6 +8,11 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Role {
+  admin
+  agent
+}
+
 model User {
   id            String    @id
   name          String
@@ -16,7 +21,7 @@ model User {
   image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  role          String?
+  role          Role      @default(agent)
   banned        Boolean?  @default(false)
   banReason     String?
   banExpires    DateTime?
