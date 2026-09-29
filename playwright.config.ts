@@ -12,7 +12,9 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: "html",
+  // Keep generated output inside e2e/ (both gitignored).
+  outputDir: "./e2e/test-results",
+  reporter: [["html", { outputFolder: "./e2e/playwright-report" }]],
   globalSetup: "./e2e/global-setup.ts",
   use: {
     baseURL: CLIENT_URL,

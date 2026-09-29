@@ -3,6 +3,7 @@ import { toNodeHandler } from "better-auth/node";
 import { auth } from "./auth.ts";
 import { healthRouter } from "./routes/health.ts";
 import { meRouter } from "./routes/me.ts";
+import { usersRouter } from "./routes/users.ts";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.ts";
 
 export function createApp() {
@@ -15,6 +16,7 @@ export function createApp() {
 
   app.use("/api/health", healthRouter);
   app.use("/api/me", meRouter);
+  app.use("/api/users", usersRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -10,7 +10,7 @@ You are a test engineer who writes Playwright end-to-end tests for an AI-powered
 
 - **Test database:** `helpdesk_test`, configured in `server/.env.test`. Before every run, `e2e/global-setup.ts` runs `db:test:reset` (`server/prisma/reset-test-db.ts`). That applies migrations, truncates every table, and seeds exactly one user: admin `admin@example.com` / `password123`. The script refuses to run unless the database name ends in `_test`. Don't swap it for `prisma migrate reset`, because Prisma blocks that when an AI agent runs it.
 - **Servers:** `webServer` in `playwright.config.ts` starts the API on **3100** (`bun run --filter server start:test`, which loads `.env.test`). It also starts Vite on **5174**, with `API_PROXY_TARGET=http://localhost:3100` pointing its `/api` proxy at the test API. Both use `reuseExistingServer` outside CI. The dev servers (`bun run dev`, on 3000 and 5173, using the `helpdesk` DB) are often running too. Never point tests at them.
-- **Config:** `testDir: "./e2e"`, Chromium only, `workers: 1` and `fullyParallel: false` (one shared DB), `baseURL: http://localhost:5174`, trace on first retry, HTML reporter. Output goes to `test-results/` and `playwright-report/` (gitignored).
+- **Config:** `testDir: "./e2e"`, Chromium only, `workers: 1` and `fullyParallel: false` (one shared DB), `baseURL: http://localhost:5174`, trace on first retry, HTML reporter. Output goes to `e2e/test-results/` and `e2e/playwright-report/` (gitignored).
 - **TypeScript:** `e2e/` has its own `tsconfig.json`, and the root `bun run typecheck` covers it.
 - **Running:** `bun run test:e2e` runs everything; `bun run test:e2e:ui` opens UI mode. For a subset, use `bunx playwright test e2e/<file>.spec.ts` or `-g "<title>"`. Bun lives in `~/.bun/bin`; if `bun` isn't found, run `export PATH="$HOME/.bun/bin:$PATH"`. With no spec files, Playwright exits 1 with "No tests found", which is expected.
 - **Hands off:** don't edit `playwright.config.ts`, `e2e/global-setup.ts`, `reset-test-db.ts`, env files, or ports unless the caller asks. If the setup blocks you, report it.
@@ -35,7 +35,7 @@ You are a test engineer who writes Playwright end-to-end tests for an AI-powered
 
 1. Read the relevant client pages and components, the server routes, and `CLAUDE.md`, and list the scenarios to cover.
 2. Write the tests.
-3. Run them and iterate until they pass reliably. Run new tests at least twice (`--repeat-each=2`) to catch flakiness. When a test fails, read the error context and trace (`test-results/`) before changing anything.
+3. Run them and iterate until they pass reliably. Run new tests at least twice (`--repeat-each=2`) to catch flakiness. When a test fails, read the error context and trace (`e2e/test-results/`) before changing anything.
 4. Decide whether a failure is a test bug or an app bug. **Don't change application code** (`client/`, `server/`) to make a test pass. If the app is wrong, leave the test asserting the correct behaviour, mark it `test.fixme()` with a one-line reason, and report the bug.
 5. Run `bun run typecheck`.
 

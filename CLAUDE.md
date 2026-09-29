@@ -44,6 +44,7 @@ Bun workspaces monorepo (`client`, `server`).
   - `src/auth.ts` — Better Auth instance; `src/permissions.ts` — admin-plugin access control keyed by the `Role` enum
   - `src/middleware/auth.ts` — `requireAuth` (401 if no session; sets `res.locals.user` / `res.locals.session`), `requireRole(...roles)` (403; use after `requireAuth`), and `requireAdmin` (standalone: 401 without a session, 403 unless admin)
   - `GET /api/me` — the signed-in user
+  - `GET /api/users` — admin-only user list (`id`, `name`, `email`, `role`, `banned`, `createdAt`), rendered by `client/src/pages/UsersPage.tsx`
   - `src/db.ts` — the shared `prisma` client; import it, never create another `PrismaClient`
   - `prisma/schema.prisma` — data models; `prisma/seed.ts` — seed script; `src/generated/prisma/` — generated client (gitignored)
   - Env vars in `server/.env` (Bun loads it automatically); document new vars in `server/.env.example`
