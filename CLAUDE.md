@@ -40,7 +40,7 @@ Bun workspaces monorepo (`client`, `server`).
   - `src/routes/` — one `Router` per resource, mounted under `/api/<resource>` in `app.ts`
   - `src/middleware/error-handler.ts` — 404 handler, JSON error handler, `HttpError` class
   - `src/auth.ts` — Better Auth instance; `src/permissions.ts` — admin-plugin access control keyed by the `Role` enum
-  - `src/middleware/auth.ts` — `requireAuth` (401 if no session; sets `res.locals.user` / `res.locals.session`) and `requireRole(...roles)` (403; use after `requireAuth`)
+  - `src/middleware/auth.ts` — `requireAuth` (401 if no session; sets `res.locals.user` / `res.locals.session`), `requireRole(...roles)` (403; use after `requireAuth`), and `requireAdmin` (standalone: 401 without a session, 403 unless admin)
   - `GET /api/me` — the signed-in user
   - `src/db.ts` — the shared `prisma` client; import it, never create another `PrismaClient`
   - `prisma/schema.prisma` — data models; `prisma/seed.ts` — seed script; `src/generated/prisma/` — generated client (gitignored)
@@ -79,6 +79,7 @@ Better Auth 1.7 with email/password and database sessions (the `session` table; 
   ```ts
   router.get("/", requireAuth, handler);                                  // 401 without a session
   router.delete("/:id", requireAuth, requireRole(Role.admin), handler);   // 403 for other roles
+  router.delete("/:id", requireAdmin, handler);                           // same, shorthand for admin-only
   ```
   After `requireAuth`, `res.locals.user` and `res.locals.session` are typed (see the `Express.Locals` augmentation). To check a session elsewhere, call `auth.api.getSession({ headers: fromNodeHeaders(req.headers) })`.
 
