@@ -38,6 +38,14 @@ export default function LoginPage() {
     <div className="mx-auto max-w-sm space-y-6">
       <h1 className="text-2xl font-bold">Sign in</h1>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+        {errors.root && (
+          <div
+            role="alert"
+            className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+          >
+            {errors.root.message}
+          </div>
+        )}
         <label className="block space-y-1">
           <span className="text-sm font-medium">Email</span>
           <input
@@ -60,7 +68,6 @@ export default function LoginPage() {
           />
           {errors.password && <p className="text-sm text-red-700">{errors.password.message}</p>}
         </label>
-        {errors.root && <p className="text-sm text-red-700">{errors.root.message}</p>}
         <button
           type="submit"
           disabled={isSubmitting}
