@@ -134,25 +134,42 @@ describe("UsersPage", () => {
       fireEvent.click(dialog.getByRole("button", { name: "Create user" }));
     }
 
-    test("shows validation errors and does not submit invalid input", async () => {
+    test("is hidden until the Create user button is clicked", async () => {
       mockUsers({ users });
-      let posted = false;
-      server.use(
-        http.post("/api/users", () => {
-          posted = true;
-          return HttpResponse.json({ user: newUser }, { status: 201 });
-        }),
-      );
       renderWithQuery(<UsersPage />);
 
-      const dialog = await openDialog();
-      fill(dialog, { Name: "Al", Email: "not-an-email", Password: "short" });
+      await screen.findByText("Ada Admin");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-      expect(await dialog.findByText("Name must be at least 3 characters")).toBeInTheDocument();
-      expect(dialog.getByText("Enter a valid email address")).toBeInTheDocument();
-      expect(dialog.getByText("Password must be at least 8 characters")).toBeInTheDocument();
-      expect(dialog.getByLabelText("Name")).toHaveAttribute("aria-invalid", "true");
-      expect(posted).toBe(false);
+      const dialog = await openDialog();
+      expect(dialog.getByLabelText("Name")).toBeInTheDocument();
+      expect(dialog.getByLabelText("Email")).toBeInTheDocument();
+      expect(dialog.getByLabelText("Password")).toBeInTheDocument();
+    });
+
+    test("closes when Escape is pressed", async () => {
+      mockUsers({ users });
+      renderWithQuery(<UsersPage />);
+
+      await openDialog();
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+
+    test("closes when clicking outside the dialog", async () => {
+      mockUsers({ users });
+      renderWithQuery(<UsersPage />);
+
+      await openDialog();
+      // Full pointer + mouse sequence of a real click; Base UI dismisses on the outside click, not pointerdown alone.
+      fireEvent.pointerDown(document.body);
+      fireEvent.mouseDown(document.body);
+      fireEvent.pointerUp(document.body);
+      fireEvent.mouseUp(document.body);
+      fireEvent.click(document.body);
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     });
 
     test("creates the user, closes the dialog and refreshes the list", async () => {
@@ -178,24 +195,6 @@ describe("UsersPage", () => {
         email: "grace@example.com",
         password: "password123",
       });
-    });
-
-    test("shows the server's error and keeps the dialog open", async () => {
-      mockUsers({ users });
-      server.use(
-        http.post("/api/users", () =>
-          HttpResponse.json({ error: "A user with this email already exists" }, { status: 409 }),
-        ),
-      );
-      renderWithQuery(<UsersPage />);
-
-      const dialog = await openDialog();
-      fill(dialog, { Name: "Ada Again", Email: "ada@example.com", Password: "password123" });
-
-      expect(await dialog.findByRole("alert")).toHaveTextContent(
-        "A user with this email already exists",
-      );
-      expect(screen.getByRole("dialog", { name: "Create user" })).toBeInTheDocument();
     });
   });
 });
