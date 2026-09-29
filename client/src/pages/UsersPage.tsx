@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { api, apiErrorMessage } from "@/lib/api";
 
 type User = {
   id: string;
@@ -20,30 +21,16 @@ type User = {
   createdAt: string;
 };
 
-type State =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "ok"; users: User[] };
-
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 export default function UsersPage() {
-  const [state, setState] = useState<State>({ status: "loading" });
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/users", { signal: controller.signal })
-      .then(async (res) => {
-        const body = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(body?.error ?? "Failed to load users");
-        setState({ status: "ok", users: (body as { users: User[] }).users });
-      })
-      .catch((err: Error) => {
-        if (controller.signal.aborted) return;
-        setState({ status: "error", message: err.message || "Failed to load users" });
-      });
-    return () => controller.abort();
-  }, []);
+  const { data: users, error, isPending } = useQuery({
+    queryKey: ["users"],
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<{ users: User[] }>("/users", { signal });
+      return data.users;
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -54,9 +41,11 @@ export default function UsersPage() {
         </p>
       </div>
 
-      {state.status === "error" ? (
+      {error ? (
         <Alert variant="destructive">
-          <AlertDescription>{state.message}</AlertDescription>
+          <AlertDescription>
+            {apiErrorMessage(error, "Failed to load users")}
+          </AlertDescription>
         </Alert>
       ) : (
         <div className="rounded-lg border bg-background">
@@ -71,7 +60,7 @@ export default function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {state.status === "loading" ? (
+              {isPending ? (
                 Array.from({ length: 3 }, (_, i) => (
                   <TableRow key={i}>
                     {Array.from({ length: 5 }, (_, j) => (
@@ -81,14 +70,14 @@ export default function UsersPage() {
                     ))}
                   </TableRow>
                 ))
-              ) : state.users.length === 0 ? (
+              ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground">
                     No users yet.
                   </TableCell>
                 </TableRow>
               ) : (
-                state.users.map((user) => (
+                users.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>

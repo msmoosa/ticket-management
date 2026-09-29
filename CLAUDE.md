@@ -36,6 +36,7 @@ Bun workspaces monorepo (`client`, `server`).
   - `src/lib/auth-client.ts` — Better Auth React client (`authClient.useSession()`, `signIn.email`, `signOut`)
   - `src/components/RequireAuth.tsx` wraps signed-in routes (redirects to `/login`); `RequireAdmin.tsx` nests inside it for admin-only routes (redirects non-admins to `/`); `GuestOnly.tsx` wraps `/login`
   - Vite proxies `/api/*` to `http://localhost:3000`, so the client calls relative `/api/...` URLs and CORS is not needed in dev
+  - Data fetching: TanStack Query (`useQuery` / `useMutation`) with the axios instance `api` from `src/lib/api.ts` (base URL `/api`; pass the query `signal`). `apiErrorMessage(err, fallback)` extracts the server's `{ error }`. The shared `queryClient` (`src/lib/query-client.ts`) skips retries on 4xx and is cleared on sign-out. Don't call `fetch` directly; Better Auth calls still go through `authClient`.
 - `server/` — Express 5 running directly on Bun (no build step)
   - `src/app.ts` — `createApp()` builds the Express app (used by both `index.ts` and tests)
   - `src/index.ts` — starts the server on `PORT`

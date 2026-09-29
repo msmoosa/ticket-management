@@ -3,6 +3,7 @@ import GuestOnly from "./components/GuestOnly.tsx";
 import RequireAdmin from "./components/RequireAdmin.tsx";
 import RequireAuth from "./components/RequireAuth.tsx";
 import { authClient } from "./lib/auth-client.ts";
+import { queryClient } from "./lib/query-client.ts";
 import HomePage from "./pages/HomePage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import NotFoundPage from "./pages/NotFoundPage.tsx";
@@ -14,6 +15,8 @@ export default function App() {
 
   async function handleSignOut() {
     await authClient.signOut();
+    // Drop cached data so the next user never sees the previous user's results.
+    queryClient.clear();
     navigate("/login", { replace: true });
   }
 

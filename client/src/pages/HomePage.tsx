@@ -1,16 +1,13 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 
-type Status = "loading" | "ok" | "error";
+const statusLabel = { pending: "loading", success: "ok", error: "error" } as const;
 
 export default function HomePage() {
-  const [status, setStatus] = useState<Status>("loading");
-
-  useEffect(() => {
-    fetch("/api/health")
-      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
-      .then(() => setStatus("ok"))
-      .catch(() => setStatus("error"));
-  }, []);
+  const { status } = useQuery({
+    queryKey: ["health"],
+    queryFn: ({ signal }) => api.get("/health", { signal }).then(() => null),
+  });
 
   return (
     <div className="space-y-4">
@@ -19,14 +16,14 @@ export default function HomePage() {
         API status:{" "}
         <span
           className={
-            status === "ok"
+            status === "success"
               ? "text-green-700"
               : status === "error"
                 ? "text-red-700"
                 : "text-gray-500"
           }
         >
-          {status}
+          {statusLabel[status]}
         </span>
       </p>
     </div>
