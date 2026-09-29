@@ -14,7 +14,7 @@ Run from the repo root. Bun lives in `~/.bun/bin` — if `bun` is not found, use
 - Dev (client + server, watch mode): `bun run dev` — client at http://localhost:5173, API at http://localhost:3000
 - Typecheck both apps: `bun run typecheck`
 - Test (server): `bun run test` — runs against the test database (see Testing below)
-- E2E (Playwright): `bun run test:e2e` (or `test:e2e:ui`); tests go in `e2e/`
+- E2E (Playwright): `bun run test:e2e` (or `test:e2e:ui`)
 - Build client: `bun run build`
 - Single workspace: `bun run --filter server <script>` or `bun run --filter client <script>`
 - Prisma (run in `server/`): `bun run db:generate`, `bun run db:migrate` (create + apply a migration), `bun run db:studio`
@@ -108,8 +108,18 @@ Better Auth 1.7 with email/password and database sessions (the `session` table; 
 
 - Tests use a separate database, `helpdesk_test`, configured in `server/.env.test` (gitignored; copy `server/.env.test.example`). Bun loads `.env.test` automatically under `bun test` (`NODE_ENV=test`), so server tests never touch the dev DB.
 - `server/prisma/reset-test-db.ts` (`db:test:reset`) refuses to run unless the database name ends in `_test`. It uses `migrate deploy` + `TRUNCATE` rather than `prisma migrate reset`, because Prisma blocks `migrate reset` when an AI agent runs it.
-- Playwright (`playwright.config.ts`, tests in `e2e/`): `e2e/global-setup.ts` runs `db:test:reset`, then `webServer` starts the API on **3100** (`server` `start:test`, loads `.env.test`) and Vite on **5174** with `API_PROXY_TARGET` pointing the `/api` proxy at 3100. This runs alongside `bun run dev` (3000 / 5173). Tests run serially (`workers: 1`) against the shared DB; `baseURL` is the client, and the seeded admin (`admin@example.com` / `password123`) is the only user after reset.
-- `e2e/` has its own `tsconfig.json`; the root `typecheck` script covers it.
+
+### E2E tests: use the `test-engineer` subagent
+
+Don't write Playwright tests in the main session. Delegate them to the `test-engineer` subagent (`.claude/agents/test-engineer.md`), which knows the Playwright setup, ports, test DB, and conventions.
+
+- **When:** after adding or changing a user-facing flow (a page, form, or role-gated route), to add a regression test for a UI bug, or when `bun run test:e2e` fails.
+- **How:** launch it with the Agent tool (`subagent_type: "test-engineer"`). The prompt should include:
+  - the feature and the files involved (client pages and components, server routes)
+  - the scenarios to cover: the main success path plus the important failures, such as validation, wrong role, or signed out
+  - anything special, e.g. which role each flow needs or data it must create
+- **What it does:** it writes the specs in `e2e/`, runs them until they pass reliably, and runs `bun run typecheck`. It never changes application code. If it finds an app bug, it marks the test `test.fixme()` and includes the bug in its report.
+- **Afterwards:** check its report and fix any app bugs it found. Remove the `fixme`, run `bun run test:e2e` to confirm, and tell the user the results.
 
 ## Planned but not yet added
 
