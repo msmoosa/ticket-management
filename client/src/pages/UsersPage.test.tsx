@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, expect, test } from "vitest";
 import { renderWithQuery } from "@/test/render.tsx";
@@ -111,4 +111,91 @@ describe("UsersPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Failed to load users");
   });
 
+  describe("create user dialog", () => {
+    const newUser = {
+      id: "u4",
+      name: "Grace Agent",
+      email: "grace@example.com",
+      role: "agent",
+      banned: false,
+      createdAt: "2026-05-01T10:00:00.000Z",
+    };
+
+    async function openDialog() {
+      await screen.findByText("Ada Admin");
+      fireEvent.click(screen.getByRole("button", { name: "Create user" }));
+      return within(await screen.findByRole("dialog", { name: "Create user" }));
+    }
+
+    function fill(dialog: ReturnType<typeof within>, values: Record<string, string>) {
+      for (const [label, value] of Object.entries(values)) {
+        fireEvent.change(dialog.getByLabelText(label), { target: { value } });
+      }
+      fireEvent.click(dialog.getByRole("button", { name: "Create user" }));
+    }
+
+    test("shows validation errors and does not submit invalid input", async () => {
+      mockUsers({ users });
+      let posted = false;
+      server.use(
+        http.post("/api/users", () => {
+          posted = true;
+          return HttpResponse.json({ user: newUser }, { status: 201 });
+        }),
+      );
+      renderWithQuery(<UsersPage />);
+
+      const dialog = await openDialog();
+      fill(dialog, { Name: "Al", Email: "not-an-email", Password: "short" });
+
+      expect(await dialog.findByText("Name must be at least 3 characters")).toBeInTheDocument();
+      expect(dialog.getByText("Enter a valid email address")).toBeInTheDocument();
+      expect(dialog.getByText("Password must be at least 8 characters")).toBeInTheDocument();
+      expect(dialog.getByLabelText("Name")).toHaveAttribute("aria-invalid", "true");
+      expect(posted).toBe(false);
+    });
+
+    test("creates the user, closes the dialog and refreshes the list", async () => {
+      let current = users;
+      server.use(http.get("/api/users", () => HttpResponse.json({ users: current })));
+      let body: unknown;
+      server.use(
+        http.post("/api/users", async ({ request }) => {
+          body = await request.json();
+          current = [...users, newUser];
+          return HttpResponse.json({ user: newUser }, { status: 201 });
+        }),
+      );
+      renderWithQuery(<UsersPage />);
+
+      const dialog = await openDialog();
+      fill(dialog, { Name: "Grace Agent", Email: "grace@example.com", Password: "password123" });
+
+      expect(await screen.findByRole("row", { name: /Grace Agent/ })).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(body).toEqual({
+        name: "Grace Agent",
+        email: "grace@example.com",
+        password: "password123",
+      });
+    });
+
+    test("shows the server's error and keeps the dialog open", async () => {
+      mockUsers({ users });
+      server.use(
+        http.post("/api/users", () =>
+          HttpResponse.json({ error: "A user with this email already exists" }, { status: 409 }),
+        ),
+      );
+      renderWithQuery(<UsersPage />);
+
+      const dialog = await openDialog();
+      fill(dialog, { Name: "Ada Again", Email: "ada@example.com", Password: "password123" });
+
+      expect(await dialog.findByRole("alert")).toHaveTextContent(
+        "A user with this email already exists",
+      );
+      expect(screen.getByRole("dialog", { name: "Create user" })).toBeInTheDocument();
+    });
+  });
 });

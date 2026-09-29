@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import CreateUserDialog from "@/components/CreateUserDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,11 +35,14 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold">Users</h1>
-        <p className="text-sm text-muted-foreground">
-          Everyone who can sign in to the help desk.
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold">Users</h1>
+          <p className="text-sm text-muted-foreground">
+            Everyone who can sign in to the help desk.
+          </p>
+        </div>
+        <CreateUserDialog />
       </div>
 
       {error ? (

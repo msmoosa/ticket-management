@@ -12,6 +12,7 @@ const id = crypto.randomUUID();
 const admin = { email: `users-admin-${id}@example.com`, name: "Users Admin" };
 const agent = { email: `users-agent-${id}@example.com`, name: "Users Agent" };
 const password = "correct-horse-battery";
+const created = { email: `users-created-${id}@example.com`, name: "Created Agent" };
 
 beforeAll(async () => {
   server = createApp().listen(0);
@@ -24,7 +25,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.user.deleteMany({
-    where: { email: { in: [admin.email, agent.email] } },
+    where: { email: { in: [admin.email, agent.email, created.email] } },
   });
   server.close();
 });
@@ -75,4 +76,58 @@ test("GET /api/users as an admin lists users without sensitive fields", async ()
       ["banned", "createdAt", "email", "id", "name", "role"].sort(),
     );
   }
+});
+
+function postUser(body: unknown, cookie?: string) {
+  return fetch(`${baseUrl}/api/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+    body: JSON.stringify(body),
+  });
+}
+
+test("POST /api/users without a session returns 401", async () => {
+  const res = await postUser({ ...created, password });
+  expect(res.status).toBe(401);
+});
+
+test("POST /api/users as an agent returns 403", async () => {
+  const cookie = await signIn(agent.email);
+  const res = await postUser({ ...created, password }, cookie);
+  expect(res.status).toBe(403);
+  expect(await res.json()).toEqual({ error: "Forbidden" });
+});
+
+test.each([
+  [{ ...created, name: "Al", password }, "Name must be at least 3 characters"],
+  [{ ...created, password: "short" }, "Password must be at least 8 characters"],
+  [{ ...created, email: "not-an-email", password }, "Enter a valid email address"],
+])("POST /api/users rejects invalid input with 400 (%#)", async (body, error) => {
+  const cookie = await signIn(admin.email);
+  const res = await postUser(body, cookie);
+  expect(res.status).toBe(400);
+  expect(await res.json()).toEqual({ error });
+  expect(await prisma.user.findUnique({ where: { email: created.email } })).toBeNull();
+});
+
+test("POST /api/users as an admin creates an agent who can sign in", async () => {
+  const cookie = await signIn(admin.email);
+  const res = await postUser({ ...created, password }, cookie);
+  expect(res.status).toBe(201);
+
+  const { user } = (await res.json()) as { user: Record<string, unknown> };
+  expect(user).toEqual(
+    expect.objectContaining({ ...created, role: Role.agent, banned: false }),
+  );
+  expect(Object.keys(user).sort()).toEqual(
+    ["banned", "createdAt", "email", "id", "name", "role"].sort(),
+  );
+  await signIn(created.email);
+});
+
+test("POST /api/users with an existing email returns 409", async () => {
+  const cookie = await signIn(admin.email);
+  const res = await postUser({ ...created, email: created.email.toUpperCase(), password }, cookie);
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({ error: "A user with this email already exists" });
 });
