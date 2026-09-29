@@ -1,7 +1,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useLocation, useNavigate, type Location } from "react-router";
+import { AlertCircleIcon } from "lucide-react";
 import { z } from "zod";
+import { Alert, AlertDescription } from "../components/ui/alert.tsx";
+import { Button } from "../components/ui/button.tsx";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card.tsx";
+import { Field, FieldError, FieldGroup, FieldLabel } from "../components/ui/field.tsx";
+import { Input } from "../components/ui/input.tsx";
 import { authClient } from "../lib/auth-client.ts";
 
 const loginSchema = z.object({
@@ -35,47 +41,48 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="mx-auto max-w-sm space-y-6">
-      <h1 className="text-2xl font-bold">Sign in</h1>
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-        {errors.root && (
-          <div
-            role="alert"
-            className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
-          >
-            {errors.root.message}
-          </div>
-        )}
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">Email</span>
-          <input
-            type="email"
-            autoComplete="email"
-            aria-invalid={errors.email ? true : undefined}
-            {...register("email")}
-            className="w-full rounded border border-gray-300 px-3 py-2 aria-invalid:border-red-600"
-          />
-          {errors.email && <p className="text-sm text-red-700">{errors.email.message}</p>}
-        </label>
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">Password</span>
-          <input
-            type="password"
-            autoComplete="current-password"
-            aria-invalid={errors.password ? true : undefined}
-            {...register("password")}
-            className="w-full rounded border border-gray-300 px-3 py-2 aria-invalid:border-red-600"
-          />
-          {errors.password && <p className="text-sm text-red-700">{errors.password.message}</p>}
-        </label>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full rounded bg-blue-700 px-3 py-2 font-medium text-white hover:bg-blue-800 disabled:opacity-50"
-        >
-          {isSubmitting ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
-    </div>
+    <Card className="mx-auto max-w-sm">
+      <CardHeader>
+        <CardTitle className="text-xl">Sign in</CardTitle>
+        <CardDescription>Enter your email and password to access your account.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit(onSubmit)} noValidate>
+          <FieldGroup>
+            {errors.root && (
+              <Alert variant="destructive">
+                <AlertCircleIcon />
+                <AlertDescription>{errors.root.message}</AlertDescription>
+              </Alert>
+            )}
+            <Field data-invalid={errors.email ? true : undefined}>
+              <FieldLabel htmlFor="email">Email</FieldLabel>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                aria-invalid={errors.email ? true : undefined}
+                {...register("email")}
+              />
+              <FieldError errors={[errors.email]} />
+            </Field>
+            <Field data-invalid={errors.password ? true : undefined}>
+              <FieldLabel htmlFor="password">Password</FieldLabel>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                aria-invalid={errors.password ? true : undefined}
+                {...register("password")}
+              />
+              <FieldError errors={[errors.password]} />
+            </Field>
+            <Button type="submit" disabled={isSubmitting} className="w-full">
+              {isSubmitting ? "Signing in…" : "Sign in"}
+            </Button>
+          </FieldGroup>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

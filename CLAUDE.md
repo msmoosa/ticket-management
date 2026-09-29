@@ -26,7 +26,9 @@ Always run `bun run typecheck` and `bun run test` after changes.
 
 Bun workspaces monorepo (`client`, `server`).
 
-- `client/` — React 19 + Vite 8 + Tailwind CSS 4 + React Router 8
+- `client/` — React 19 + Vite 8 + Tailwind CSS 4 + React Router 8 + shadcn/ui
+  - `@/` aliases `client/src/` (set in `tsconfig.json`, `tsconfig.app.json`, and `vite.config.ts`)
+  - `src/components/ui/` — shadcn components (generated; add more with `bunx --bun shadcn@latest add <name>` from `client/`); `src/lib/utils.ts` exports `cn`
   - `src/App.tsx` — layout and route table
   - `src/pages/` — one component per route
   - `src/lib/auth-client.ts` — Better Auth React client (`authClient.useSession()`, `signIn.email`, `signOut`)
@@ -51,25 +53,53 @@ Bun workspaces monorepo (`client`, `server`).
 - API responses are JSON. Errors are `{ "error": string }` with an appropriate status.
 - To return a 4xx, `throw new HttpError(status, message)` — Express 5 forwards thrown errors and rejected promises from async handlers to the error handler automatically, so no try/catch or async wrapper is needed.
 - Server tests use `bun:test`, live next to the code as `*.test.ts`, and start the app with `createApp().listen(0)` then call it with `fetch`.
-- Styling: Tailwind utility classes only; no custom CSS beyond `client/src/index.css`.
+- Styling: Tailwind utility classes only; no custom CSS beyond `client/src/index.css`. Use shadcn components for UI primitives (buttons, inputs, dialogs, …) and the theme tokens (`bg-background`, `text-muted-foreground`, `bg-primary`, …) rather than raw colors.
+- Forms: react-hook-form + `zodResolver` with a zod schema, rendered with shadcn `Field` / `FieldLabel` / `Input` / `FieldError` (set `data-invalid` on `Field` and `aria-invalid` on the input); server errors go in `setError("root", …)` and show as a destructive `Alert`. `src/pages/LoginPage.tsx` is the reference.
+- `client/src/index.css` suppresses Chrome's autofill background/text color on all inputs (a delayed-transition hack, since the UA styles are `!important`) — keep it unlayered so it beats `transition-colors`.
 - Use context7 mcp server to fetch upto date documentation for libraries
 
 ## Library gotchas (current versions)
 
 - **React Router 8**: import everything from `react-router` (`react-router-dom` no longer exists; DOM-only APIs come from `react-router/dom`). The app uses declarative mode (`<BrowserRouter>`, `<Routes>`, `<Route>`).
-- **Tailwind CSS 4**: configured via the `@tailwindcss/vite` plugin and `@import "tailwindcss"` in CSS. There is no `tailwind.config.js`; put theme customization in CSS with `@theme`.
+- **Tailwind CSS 4**: configured via the `@tailwindcss/vite` plugin and `@import "tailwindcss"` in CSS. There is no `tailwind.config.js`; put theme customization in CSS with `@theme`. The shadcn theme (`base-nova` style, neutral base color, CSS variables in `:root` / `.dark`) lives in `client/src/index.css`.
+- **shadcn/ui (`base-nova`)**: components are built on Base UI (`@base-ui/react`), not Radix — use Base UI's props (e.g. the `render` prop instead of Radix's `asChild`). `cn` comes from the `cn` package, not `clsx` + `tailwind-merge`.
 - **Express 5**: path syntax changed from v4 (e.g. wildcards must be named: `/*splat`, not `*`).
 - **Bun**: runs TypeScript natively. Use `bun`/`bunx`, not `npm`/`npx`/`node`.
 - Look up current docs with context7 before using an API you are unsure about — these libraries are newer than most examples online.
 
 ## Auth
 
-- Better Auth 1.7, email/password, sessions stored in the `session` table (no secondary storage).
-- The handler is mounted at `/api/auth/*splat` **before** `express.json()` in `app.ts` — the body parser would otherwise consume the request.
-- Public sign-up is disabled (`disableSignUp`). Users are created with the admin plugin: `auth.api.createUser` called server-side without headers needs no session (used by the seed and tests); over HTTP, `/api/auth/admin/*` requires an admin session.
-- Roles are the Prisma enum `Role` (`admin` | `agent`, default `agent`) on `User.role`. In server code import `Role` from `src/generated/prisma/enums.ts` rather than using string literals. `src/permissions.ts` keys the admin plugin's roles by this enum, so the plugin rejects any other value. `auth:generate` keeps the enum type on existing fields.
-- `User` / `Session` / `Account` / `Verification` models are owned by Better Auth — change them via its config + `auth:generate`, not by hand.
-- Env vars: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CLIENT_ORIGIN` (in `trustedOrigins` because the Vite proxy forwards the browser's `Origin`). Tests that POST to `/api/auth/*` must send a trusted `Origin` header.
+Better Auth 1.7 with email/password and database sessions (the `session` table; no secondary storage). The browser holds an HTTP-only `better-auth.session_token` cookie; the Vite proxy keeps it same-origin, so there are no tokens to manage on the client.
+
+### Server
+
+- `src/auth.ts` is the Better Auth instance: Prisma adapter, `emailAndPassword` with `disableSignUp`, the admin plugin, and `trustedOrigins` from `CLIENT_ORIGIN`. `Session` (exported type) is `typeof auth.$Infer.Session`.
+- The handler is mounted at `/api/auth/*splat` **before** `express.json()` in `app.ts` — the body parser would otherwise consume the request. Better Auth serves sign-in (`POST /api/auth/sign-in/email`), sign-out (`POST /api/auth/sign-out`), `GET /api/auth/get-session`, and the admin endpoints; don't write custom login/logout routes.
+- Protect app routes with the middleware in `src/middleware/auth.ts`:
+  ```ts
+  router.get("/", requireAuth, handler);                                  // 401 without a session
+  router.delete("/:id", requireAuth, requireRole(Role.admin), handler);   // 403 for other roles
+  ```
+  After `requireAuth`, `res.locals.user` and `res.locals.session` are typed (see the `Express.Locals` augmentation). To check a session elsewhere, call `auth.api.getSession({ headers: fromNodeHeaders(req.headers) })`.
+
+### Users and roles
+
+- Public sign-up is disabled. The first admin comes from `bun run db:seed`; every other user is created by an admin through the admin plugin.
+- Admin plugin endpoints live under `/api/auth/admin/*` (`create-user`, `list-users`, `get-user`, `update-user`, `set-role`, `set-user-password`, `remove-user`, `ban-user` / `unban-user`, `list-user-sessions`, `revoke-user-session(s)`, `impersonate-user`). Over HTTP they require an admin session. Server-side, `auth.api.<method>` called **without** `headers` skips the session check (used by the seed and tests); pass `headers` to act as the signed-in user.
+- Roles are the Prisma enum `Role` (`admin` | `agent`, default `agent`) on `User.role`. In server code import `Role` from `src/generated/prisma/enums.ts` rather than using string literals. `src/permissions.ts` keys the admin plugin's roles by this enum (`admin` → `adminAc`, `agent` → `userAc`), so the plugin rejects any other value. `auth:generate` keeps the enum type on existing fields.
+- The admin plugin also added `User.banned` / `banReason` / `banExpires` and `Session.impersonatedBy`; banned users cannot sign in.
+- `User` / `Session` / `Account` / `Verification` models are owned by Better Auth — change them via its config + `auth:generate`, not by hand. Passwords are hashed in `Account.password`, not on `User`.
+
+### Client
+
+- `src/lib/auth-client.ts` exports `authClient` (with `adminClient()`): `authClient.useSession()` → `{ data: { user, session } | null, isPending }`, `authClient.signIn.email(...)`, `authClient.signOut()`, and `authClient.admin.*` for user management. Calls return `{ data, error }` rather than throwing.
+- Routing: signed-in routes go inside the `<Route element={<RequireAuth />}>` group in `App.tsx`, which redirects to `/login` with `state.from`; `/login` is inside `<GuestOnly />`, which sends signed-in users back to `from` (default `/`). After sign-in, `LoginPage` navigates to `from`; after sign-out, `App.tsx` navigates to `/login`.
+- Role-gate UI with `session.user.role === "admin"`, but always enforce it on the server with `requireRole` — client checks are only for hiding UI.
+
+### Env and testing
+
+- Env vars: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CLIENT_ORIGIN` (in `trustedOrigins` because the Vite proxy forwards the browser's `Origin`), plus `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / optional `SEED_ADMIN_NAME` for the seed.
+- Tests (see `src/auth.test.ts`): create users with `auth.api.createUser`, sign in by POSTing to `/api/auth/sign-in/email` with a trusted `Origin` header (required on every POST to `/api/auth/*`), take the `better-auth.session_token=…` pair from `Set-Cookie`, and send it as `Cookie` on later requests. Use unique emails and delete the users in `afterAll`.
 
 ## Planned but not yet added
 
