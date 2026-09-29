@@ -15,17 +15,25 @@ test.describe("users page (admin)", () => {
 
     await page.goto("/users");
     await expect(usersHeading(page)).toBeVisible();
-    await expect(
-      page.getByRole("columnheader"),
-    ).toHaveText(["Name", "Email", "Role", "Status", "Created"]);
+    await expect(page.getByRole("columnheader")).toHaveText([
+      "Name",
+      "Email",
+      "Role",
+      "Status",
+      "Created",
+      "Actions",
+    ]);
 
     const agentCells = userRow(page, agent.email).getByRole("cell");
-    await expect(agentCells).toHaveCount(5);
+    await expect(agentCells).toHaveCount(6);
     await expect(agentCells.nth(0)).toHaveText(agent.name);
     await expect(agentCells.nth(1)).toHaveText(agent.email);
     await expect(agentCells.nth(2)).toHaveText("Agent");
     await expect(agentCells.nth(3)).toHaveText("Active");
     await expect(agentCells.nth(4)).not.toBeEmpty();
+    await expect(
+      agentCells.nth(5).getByRole("button", { name: `Edit ${agent.name}` }),
+    ).toBeVisible();
 
     const adminCells = userRow(page, ADMIN.email).getByRole("cell");
     await expect(adminCells.nth(0)).toHaveText(ADMIN.name);

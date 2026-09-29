@@ -17,7 +17,8 @@ async function loadSession(req: Request, res: Response) {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
   });
-  if (!session) throw new HttpError(401, "Unauthorized");
+  // Deleting a user removes their sessions; the deletedAt check is a backstop.
+  if (!session || session.user.deletedAt) throw new HttpError(401, "Unauthorized");
   res.locals.session = session.session;
   res.locals.user = session.user;
 }

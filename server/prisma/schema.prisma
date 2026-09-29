@@ -28,6 +28,8 @@ model User {
   sessions      Session[]
   accounts      Account[]
 
+  deletedAt DateTime?
+
   @@unique([email])
   @@map("user")
 }

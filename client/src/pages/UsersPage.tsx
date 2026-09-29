@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import CreateUserDialog from "@/components/CreateUserDialog";
+import DeleteUserDialog from "@/components/DeleteUserDialog";
+import EditUserDialog from "@/components/EditUserDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,19 +14,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api, apiErrorMessage } from "@/lib/api";
-
-type User = {
-  id: string;
-  name: string;
-  email: string;
-  role: "admin" | "agent";
-  banned: boolean | null;
-  createdAt: string;
-};
+import { authClient } from "@/lib/auth-client";
+import type { User } from "@/lib/users";
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 export default function UsersPage() {
+  const { data: session } = authClient.useSession();
   const { data: users, error, isPending } = useQuery({
     queryKey: ["users"],
     queryFn: async ({ signal }) => {
@@ -61,13 +57,16 @@ export default function UsersPage() {
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
+                <TableHead className="w-0">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody aria-busy={isPending}>
               {isPending ? (
                 Array.from({ length: 3 }, (_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 5 }, (_, j) => (
+                    {Array.from({ length: 6 }, (_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-24" />
                       </TableCell>
@@ -76,7 +75,7 @@ export default function UsersPage() {
                 ))
               ) : users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
                     No users yet.
                   </TableCell>
                 </TableRow>
@@ -99,6 +98,15 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {dateFormat.format(new Date(user.createdAt))}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        <EditUserDialog user={user} />
+                        <DeleteUserDialog
+                          user={user}
+                          isCurrentUser={user.id === session?.user.id}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

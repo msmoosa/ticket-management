@@ -17,7 +17,7 @@ Run from the repo root. Bun lives in `~/.bun/bin` — if `bun` is not found, use
 - E2E (Playwright): `bun run test:e2e` (or `test:e2e:ui`)
 - Build client: `bun run build`
 - Single workspace: `bun run --filter server <script>` or `bun run --filter client <script>`
-- Prisma (run in `server/`): `bun run db:generate`, `bun run db:migrate` (create + apply a migration), `bun run db:studio`
+- Prisma (run in `server/`): `bun run db:generate`, `bun run db:migrate` (create + apply a migration; Prisma 7 does not regenerate the client, so run `db:generate` after it), `bun run db:studio`
 - Seed (run in `server/`): `bun run db:seed` creates the admin user from `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (dev default: `admin@example.com` / `password123`); safe to re-run
 - Test DB (run in `server/`): `bun run db:test:reset` applies migrations to `helpdesk_test` (creating it if needed), truncates every table, and seeds the admin. Run it once on a fresh machine and after adding migrations; `test:e2e` runs it automatically
 - Better Auth schema (run in `server/`): `bun run auth:generate` rewrites the auth models in `prisma/schema.prisma` — rerun after changing auth plugins, check `git diff` that other models survived, then `db:migrate`
@@ -47,6 +47,8 @@ Bun workspaces monorepo (`client`, `server`).
   - `GET /api/me` — the signed-in user
   - `GET /api/users` — admin-only user list (`id`, `name`, `email`, `role`, `banned`, `createdAt`), rendered by `client/src/pages/UsersPage.tsx`
   - `POST /api/users` — admin-only; creates an agent from `{ name, email, password }` (zod-validated: name ≥ 3, password ≥ 8; 409 on duplicate email) via `auth.api.createUser`. Used by `client/src/components/CreateUserDialog.tsx` on the users page
+  - `PATCH /api/users/:id` — admin-only; updates `{ name, email, password? }` (same rules; omit `password` to keep it; 404 unknown user, 409 email taken) via `auth.api.adminUpdateUser` / `setUserPassword`, which need the admin's request `headers` (unlike `createUser`). Used by `client/src/components/EditUserDialog.tsx`; both dialogs render the shared `UserForm.tsx`
+  - `DELETE /api/users/:id` — admin-only **soft delete** (204; 404 if unknown or already deleted): sets `User.deletedAt` and deletes the user's sessions. Any admin can delete any user, including admins and themselves (the client then signs out). Deleted users are hidden from `GET /api/users`, 404 on `PATCH`, can't sign in (session-create hook in `auth.ts`), and keep their email reserved (409 "This email belongs to a deleted user"). Any new user query should filter `deletedAt: null`. UI: `client/src/components/DeleteUserDialog.tsx` (shadcn `alert-dialog`)
   - `src/db.ts` — the shared `prisma` client; import it, never create another `PrismaClient`
   - `prisma/schema.prisma` — data models; `prisma/seed.ts` — seed script; `src/generated/prisma/` — generated client (gitignored)
   - Env vars in `server/.env` (Bun loads it automatically); document new vars in `server/.env.example`
@@ -95,6 +97,7 @@ Better Auth 1.7 with email/password and database sessions (the `session` table; 
 - Admin plugin endpoints live under `/api/auth/admin/*` (`create-user`, `list-users`, `get-user`, `update-user`, `set-role`, `set-user-password`, `remove-user`, `ban-user` / `unban-user`, `list-user-sessions`, `revoke-user-session(s)`, `impersonate-user`). Over HTTP they require an admin session. Server-side, `auth.api.<method>` called **without** `headers` skips the session check (used by the seed and tests); pass `headers` to act as the signed-in user.
 - Roles are the Prisma enum `Role` (`admin` | `agent`, default `agent`) on `User.role`. In server code import `Role` from `src/generated/prisma/enums.ts` rather than using string literals. `src/permissions.ts` keys the admin plugin's roles by this enum (`admin` → `adminAc`, `agent` → `userAc`), so the plugin rejects any other value. `auth:generate` keeps the enum type on existing fields.
 - The admin plugin also added `User.banned` / `banReason` / `banExpires` and `Session.impersonatedBy`; banned users cannot sign in.
+- `User.deletedAt` (soft delete) is a Better Auth `user.additionalFields` entry in `auth.ts` (`input: false`), so it survives `auth:generate`.
 - `User` / `Session` / `Account` / `Verification` models are owned by Better Auth — change them via its config + `auth:generate`, not by hand. Passwords are hashed in `Account.password`, not on `User`.
 
 ### Client

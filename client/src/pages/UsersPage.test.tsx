@@ -1,9 +1,18 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { authClient } from "@/lib/auth-client";
 import { renderWithQuery } from "@/test/render.tsx";
 import { server } from "@/test/server.ts";
 import UsersPage from "./UsersPage.tsx";
+
+// Signed in as Ada Admin (u1).
+vi.mock("@/lib/auth-client", () => ({
+  authClient: {
+    useSession: () => ({ data: { user: { id: "u1", role: "admin" } }, isPending: false }),
+    signOut: vi.fn(async () => ({ data: { success: true }, error: null })),
+  },
+}));
 
 const users = [
   {
@@ -65,7 +74,7 @@ describe("UsersPage", () => {
     await screen.findByText("Ada Admin");
     expect(
       screen.getAllByRole("columnheader").map((th) => th.textContent),
-    ).toEqual(["Name", "Email", "Role", "Status", "Created"]);
+    ).toEqual(["Name", "Email", "Role", "Status", "Created", "Actions"]);
 
     const admin = within(rowFor("Ada Admin"));
     expect(admin.getByText("ada@example.com")).toBeInTheDocument();
@@ -195,6 +204,96 @@ describe("UsersPage", () => {
         email: "grace@example.com",
         password: "password123",
       });
+    });
+  });
+
+  describe("edit user dialog", () => {
+    test("each row has an edit button", async () => {
+      mockUsers({ users });
+      renderWithQuery(<UsersPage />);
+
+      await screen.findByText("Ada Admin");
+      for (const { name } of users) {
+        expect(
+          within(rowFor(name)).getByRole("button", { name: `Edit ${name}` }),
+        ).toBeInTheDocument();
+      }
+    });
+
+    test("opens with the row's user and refreshes the list after saving", async () => {
+      let current = users;
+      server.use(http.get("/api/users", () => HttpResponse.json({ users: current })));
+      server.use(
+        http.patch("/api/users/u2", async ({ request }) => {
+          const body = (await request.json()) as { name: string; email: string };
+          current = current.map((u) => (u.id === "u2" ? { ...u, ...body } : u));
+          return HttpResponse.json({ user: current[1] });
+        }),
+      );
+      renderWithQuery(<UsersPage />);
+
+      await screen.findByText("Alan Agent");
+      fireEvent.click(screen.getByRole("button", { name: "Edit Alan Agent" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Edit user" }));
+      expect(dialog.getByLabelText("Email")).toHaveValue("alan@example.com");
+
+      fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "Alan Turing" } });
+      fireEvent.click(dialog.getByRole("button", { name: "Save changes" }));
+
+      expect(await screen.findByRole("row", { name: /Alan Turing/ })).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(screen.queryByText("Alan Agent")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("delete user dialog", () => {
+    test("each row has a delete button", async () => {
+      mockUsers({ users });
+      renderWithQuery(<UsersPage />);
+
+      await screen.findByText("Ada Admin");
+      for (const { name } of users) {
+        expect(
+          within(rowFor(name)).getByRole("button", { name: `Delete ${name}` }),
+        ).toBeInTheDocument();
+      }
+    });
+
+    test("removes the row after confirming", async () => {
+      let current = users;
+      server.use(http.get("/api/users", () => HttpResponse.json({ users: current })));
+      server.use(
+        http.delete("/api/users/u2", () => {
+          current = current.filter((u) => u.id !== "u2");
+          return new HttpResponse(null, { status: 204 });
+        }),
+      );
+      renderWithQuery(<UsersPage />);
+
+      await screen.findByText("Alan Agent");
+      fireEvent.click(screen.getByRole("button", { name: "Delete Alan Agent" }));
+      const dialog = within(await screen.findByRole("alertdialog", { name: "Delete Alan Agent?" }));
+      expect(dialog.queryByText(/This is your account/)).not.toBeInTheDocument();
+      fireEvent.click(dialog.getByRole("button", { name: "Delete" }));
+
+      await waitFor(() => expect(screen.queryByText("Alan Agent")).not.toBeInTheDocument());
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(screen.getByText("Ada Admin")).toBeInTheDocument();
+      expect(authClient.signOut).not.toHaveBeenCalled();
+    });
+
+    test("warns that deleting your own row signs you out", async () => {
+      mockUsers({ users });
+      server.use(http.delete("/api/users/u1", () => new HttpResponse(null, { status: 204 })));
+      renderWithQuery(<UsersPage />);
+
+      await screen.findByText("Ada Admin");
+      fireEvent.click(screen.getByRole("button", { name: "Delete Ada Admin" }));
+      const dialog = within(await screen.findByRole("alertdialog", { name: "Delete Ada Admin?" }));
+      expect(dialog.getByText(/This is your account/)).toBeInTheDocument();
+
+      fireEvent.click(dialog.getByRole("button", { name: "Delete" }));
+      await waitFor(() => expect(authClient.signOut).toHaveBeenCalledOnce());
     });
   });
 });

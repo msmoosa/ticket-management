@@ -20,8 +20,8 @@
 - [ ] Create user management page (admin only)
 - [x] Implement create agent API endpoint
 - [x] Implement list users API endpoint
-- [ ] Implement edit user API endpoint
-- [ ] Implement delete user API endpoint
+- [x] Implement edit user API endpoint
+- [x] Implement delete user API endpoint
 - [ ] Add role-based access control (admin vs agent)
 
 ## Phase 4: Ticket CRUD
