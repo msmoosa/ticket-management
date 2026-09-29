@@ -32,7 +32,7 @@ Bun workspaces monorepo (`client`, `server`).
   - `src/App.tsx` — layout and route table
   - `src/pages/` — one component per route
   - `src/lib/auth-client.ts` — Better Auth React client (`authClient.useSession()`, `signIn.email`, `signOut`)
-  - `src/components/RequireAuth.tsx` wraps signed-in routes (redirects to `/login`); `GuestOnly.tsx` wraps `/login`
+  - `src/components/RequireAuth.tsx` wraps signed-in routes (redirects to `/login`); `RequireAdmin.tsx` nests inside it for admin-only routes (redirects non-admins to `/`); `GuestOnly.tsx` wraps `/login`
   - Vite proxies `/api/*` to `http://localhost:3000`, so the client calls relative `/api/...` URLs and CORS is not needed in dev
 - `server/` — Express 5 running directly on Bun (no build step)
   - `src/app.ts` — `createApp()` builds the Express app (used by both `index.ts` and tests)
@@ -93,7 +93,7 @@ Better Auth 1.7 with email/password and database sessions (the `session` table; 
 ### Client
 
 - `src/lib/auth-client.ts` exports `authClient` (with `adminClient()`): `authClient.useSession()` → `{ data: { user, session } | null, isPending }`, `authClient.signIn.email(...)`, `authClient.signOut()`, and `authClient.admin.*` for user management. Calls return `{ data, error }` rather than throwing.
-- Routing: signed-in routes go inside the `<Route element={<RequireAuth />}>` group in `App.tsx`, which redirects to `/login` with `state.from`; `/login` is inside `<GuestOnly />`, which sends signed-in users back to `from` (default `/`). After sign-in, `LoginPage` navigates to `from`; after sign-out, `App.tsx` navigates to `/login`.
+- Routing: signed-in routes go inside the `<Route element={<RequireAuth />}>` group in `App.tsx`, which redirects to `/login` with `state.from`; `/login` is inside `<GuestOnly />`, which sends signed-in users back to `from` (default `/`). After sign-in, `LoginPage` navigates to `from`; after sign-out, `App.tsx` navigates to `/login`. Admin-only routes (currently `/users`) go in the nested `<Route element={<RequireAdmin />}>` group, and their nav links are rendered only for admins.
 - Role-gate UI with `session.user.role === "admin"`, but always enforce it on the server with `requireRole` — client checks are only for hiding UI.
 
 ### Env and testing

@@ -1,10 +1,12 @@
 import { Link, Route, Routes, useNavigate } from "react-router";
 import GuestOnly from "./components/GuestOnly.tsx";
+import RequireAdmin from "./components/RequireAdmin.tsx";
 import RequireAuth from "./components/RequireAuth.tsx";
 import { authClient } from "./lib/auth-client.ts";
 import HomePage from "./pages/HomePage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import NotFoundPage from "./pages/NotFoundPage.tsx";
+import UsersPage from "./pages/UsersPage.tsx";
 
 export default function App() {
   const { data: session } = authClient.useSession();
@@ -22,6 +24,11 @@ export default function App() {
           <Link to="/" className="font-semibold">
             Ticket Management
           </Link>
+          {session?.user.role === "admin" && (
+            <Link to="/users" className="text-sm text-gray-600 hover:text-gray-900">
+              Users
+            </Link>
+          )}
           {session && (
             <div className="ml-auto flex items-center gap-4 text-sm">
               <span className="text-gray-600">{session.user.name}</span>
@@ -43,6 +50,9 @@ export default function App() {
           </Route>
           <Route element={<RequireAuth />}>
             <Route index element={<HomePage />} />
+            <Route element={<RequireAdmin />}>
+              <Route path="users" element={<UsersPage />} />
+            </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
