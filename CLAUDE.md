@@ -13,11 +13,13 @@ Run from the repo root. Bun lives in `~/.bun/bin` — if `bun` is not found, use
 - Install: `bun install`
 - Dev (client + server, watch mode): `bun run dev` — client at http://localhost:5173, API at http://localhost:3000
 - Typecheck both apps: `bun run typecheck`
-- Test (server): `bun run test`
+- Test (server): `bun run test` — runs against the test database (see Testing below)
+- E2E (Playwright): `bun run test:e2e` (or `test:e2e:ui`); tests go in `e2e/`
 - Build client: `bun run build`
 - Single workspace: `bun run --filter server <script>` or `bun run --filter client <script>`
 - Prisma (run in `server/`): `bun run db:generate`, `bun run db:migrate` (create + apply a migration), `bun run db:studio`
 - Seed (run in `server/`): `bun run db:seed` creates the admin user from `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (dev default: `admin@example.com` / `password123`); safe to re-run
+- Test DB (run in `server/`): `bun run db:test:reset` applies migrations to `helpdesk_test` (creating it if needed), truncates every table, and seeds the admin. Run it once on a fresh machine and after adding migrations; `test:e2e` runs it automatically
 - Better Auth schema (run in `server/`): `bun run auth:generate` rewrites the auth models in `prisma/schema.prisma` — rerun after changing auth plugins, check `git diff` that other models survived, then `db:migrate`
 
 Always run `bun run typecheck` and `bun run test` after changes.
@@ -100,7 +102,14 @@ Better Auth 1.7 with email/password and database sessions (the `session` table; 
 ### Env and testing
 
 - Env vars: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CLIENT_ORIGIN` (in `trustedOrigins` because the Vite proxy forwards the browser's `Origin`), plus `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / optional `SEED_ADMIN_NAME` for the seed.
-- Tests (see `src/auth.test.ts`): create users with `auth.api.createUser`, sign in by POSTing to `/api/auth/sign-in/email` with a trusted `Origin` header (required on every POST to `/api/auth/*`), take the `better-auth.session_token=…` pair from `Set-Cookie`, and send it as `Cookie` on later requests. Use unique emails and delete the users in `afterAll`.
+- Server tests (see `src/auth.test.ts`): create users with `auth.api.createUser`, sign in by POSTing to `/api/auth/sign-in/email` with a trusted `Origin` header (required on every POST to `/api/auth/*`), take the `better-auth.session_token=…` pair from `Set-Cookie`, and send it as `Cookie` on later requests. Use unique emails and delete the users in `afterAll`.
+
+## Testing
+
+- Tests use a separate database, `helpdesk_test`, configured in `server/.env.test` (gitignored; copy `server/.env.test.example`). Bun loads `.env.test` automatically under `bun test` (`NODE_ENV=test`), so server tests never touch the dev DB.
+- `server/prisma/reset-test-db.ts` (`db:test:reset`) refuses to run unless the database name ends in `_test`. It uses `migrate deploy` + `TRUNCATE` rather than `prisma migrate reset`, because Prisma blocks `migrate reset` when an AI agent runs it.
+- Playwright (`playwright.config.ts`, tests in `e2e/`): `e2e/global-setup.ts` runs `db:test:reset`, then `webServer` starts the API on **3100** (`server` `start:test`, loads `.env.test`) and Vite on **5174** with `API_PROXY_TARGET` pointing the `/api` proxy at 3100. This runs alongside `bun run dev` (3000 / 5173). Tests run serially (`workers: 1`) against the shared DB; `baseURL` is the client, and the seeded admin (`admin@example.com` / `password123`) is the only user after reset.
+- `e2e/` has its own `tsconfig.json`; the root `typecheck` script covers it.
 
 ## Planned but not yet added
 

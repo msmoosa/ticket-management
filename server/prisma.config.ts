@@ -1,4 +1,5 @@
-// Run Prisma CLI commands through the `db:*` scripts, which pass `--env-file=.env` so DATABASE_URL is set.
+// Run Prisma CLI commands through the `db:*` scripts, which pass `--env-file=.env` (or `.env.test`
+// for `db:test:reset`) so DATABASE_URL is set.
 import { defineConfig, env } from "prisma/config";
 
 export default defineConfig({

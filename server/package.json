@@ -5,12 +5,14 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
+    "start:test": "bun --env-file=.env.test src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "db:generate": "bun --env-file=.env --bun prisma generate",
     "db:migrate": "bun --env-file=.env --bun prisma migrate dev",
     "db:studio": "bun --env-file=.env --bun prisma studio",
     "db:seed": "bun --env-file=.env --bun prisma db seed",
+    "db:test:reset": "bun --env-file=.env.test prisma/reset-test-db.ts",
     "auth:generate": "bun --env-file=.env x --bun auth@1.7.6 generate --config src/auth.ts --output prisma/schema.prisma --yes"
   },
   "dependencies": {
