@@ -59,7 +59,7 @@ export default function UsersPage() {
                 <TableHead>Created</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody aria-busy={isPending}>
               {isPending ? (
                 Array.from({ length: 3 }, (_, i) => (
                   <TableRow key={i}>
