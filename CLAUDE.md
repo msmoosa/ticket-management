@@ -13,7 +13,7 @@ Run from the repo root. Bun lives in `~/.bun/bin` — if `bun` is not found, use
 - Install: `bun install`
 - Dev (client + server, watch mode): `bun run dev` — client at http://localhost:5173, API at http://localhost:3000
 - Typecheck both apps: `bun run typecheck`
-- Test (server): `bun run test` — runs against the test database (see Testing below)
+- Test (server + client): `bun run test` — server tests against the test database plus client component tests with Vitest (see Testing below)
 - E2E (Playwright): `bun run test:e2e` (or `test:e2e:ui`)
 - Build client: `bun run build`
 - Single workspace: `bun run --filter server <script>` or `bun run --filter client <script>`
@@ -57,6 +57,7 @@ Bun workspaces monorepo (`client`, `server`).
 - API responses are JSON. Errors are `{ "error": string }` with an appropriate status.
 - To return a 4xx, `throw new HttpError(status, message)` — Express 5 forwards thrown errors and rejected promises from async handlers to the error handler automatically, so no try/catch or async wrapper is needed.
 - Server tests use `bun:test`, live next to the code as `*.test.ts`, and start the app with `createApp().listen(0)` then call it with `fetch`.
+- Client component tests use Vitest + React Testing Library + MSW and live next to the component as `*.test.tsx` (see Testing > Component tests).
 - Styling: Tailwind utility classes only; no custom CSS beyond `client/src/index.css`. Use shadcn components for UI primitives (buttons, inputs, dialogs, …) and the theme tokens (`bg-background`, `text-muted-foreground`, `bg-primary`, …) rather than raw colors.
 - Forms: react-hook-form + `zodResolver` with a zod schema, rendered with shadcn `Field` / `FieldLabel` / `Input` / `FieldError` (set `data-invalid` on `Field` and `aria-invalid` on the input); server errors go in `setError("root", …)` and show as a destructive `Alert`. `src/pages/LoginPage.tsx` is the reference.
 - `client/src/index.css` suppresses Chrome's autofill background/text color on all inputs (a delayed-transition hack, since the UA styles are `!important`) — keep it unlayered so it beats `transition-colors`.
@@ -108,8 +109,36 @@ Better Auth 1.7 with email/password and database sessions (the `session` table; 
 
 ## Testing
 
+Three layers: server tests (`bun:test`, real test DB), client component tests (Vitest + React Testing Library, mocked API), and e2e tests (Playwright, full stack). `bun run test` runs the first two; `bun run test:e2e` runs the third.
+
+### Server tests
+
 - Tests use a separate database, `helpdesk_test`, configured in `server/.env.test` (gitignored; copy `server/.env.test.example`). Bun loads `.env.test` automatically under `bun test` (`NODE_ENV=test`), so server tests never touch the dev DB.
 - `server/prisma/reset-test-db.ts` (`db:test:reset`) refuses to run unless the database name ends in `_test`. It uses `migrate deploy` + `TRUNCATE` rather than `prisma migrate reset`, because Prisma blocks `migrate reset` when an AI agent runs it.
+
+### Component tests (client)
+
+Test a page or component in isolation: what it renders for each API response (loading, data, empty, error). Flows that span pages, auth, or the real server belong in e2e tests instead.
+
+- **Stack:** Vitest 5 + jsdom, React Testing Library, `@testing-library/jest-dom` matchers, and MSW 3 to mock the API. Config is `client/vitest.config.ts`, which merges `vite.config.ts` so the `@/` alias works.
+- **Run:** `bun run test` (root, with the server tests), `bun run --filter client test`, or `bun run test:watch` in `client/`. Don't run `bun test` in `client/` — that's Bun's own runner, not Vitest.
+- **Where:** next to the component as `*.test.tsx` (e.g. `src/pages/UsersPage.test.tsx`, the reference). Import `describe` / `test` / `expect` from `vitest` (globals are off).
+- **Helpers** in `client/src/test/`:
+  - `setup.ts` — loads jest-dom matchers, starts MSW, and after each test runs RTL `cleanup()` and resets handlers. Unhandled requests are errors (MSW 3 renamed `onUnhandledRequest` to `onUnhandledFrame`).
+  - `server.ts` — the MSW `server`, with no default handlers; each test registers what it needs with `server.use(...)`.
+  - `render.tsx` — `renderWithQuery(ui)` renders inside a fresh `QueryClient` with retries off, so tests don't share cache and errors show immediately. Wrap in a `MemoryRouter` too if the component uses router hooks or `<Link>`.
+- **Pattern:**
+  ```tsx
+  server.use(http.get("/api/users", () => HttpResponse.json({ users })));
+  renderWithQuery(<UsersPage />);
+  const row = within(await screen.findByRole("row", { name: /Ada Admin/ }));
+  expect(row.getByText("Admin")).toBeInTheDocument();
+  ```
+  - Mock relative `/api/...` paths, exactly as the app requests them through the `api` axios instance. Error responses use the server's shape: `HttpResponse.json({ error: "Forbidden" }, { status: 403 })`; a network failure is `HttpResponse.error()`.
+  - Query the way a user would: `getByRole` (with `name`) first, then `getByText`; scope to a row or section with `within`. Use `findBy…` to wait for data, `queryBy…` to assert absence. Avoid test IDs and class names.
+  - Loading state: assert it synchronously right after `render`, before awaiting anything. Loading UIs expose `role="status"` / `aria-busy`, which is what tests should target.
+  - Locale-dependent output (dates, numbers): build the expected string with the same `Intl` formatter rather than hard-coding it.
+- Cover the success render plus the loading, empty, and error states. Check that a test fails when the behavior it guards is broken.
 
 ### E2E tests: use the `test-engineer` subagent
 
