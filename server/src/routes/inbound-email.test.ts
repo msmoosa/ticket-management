@@ -99,6 +99,7 @@ test("creates an open ticket from the email", async () => {
     fromEmail: "student@example.com",
     fromName: "Sam Student",
     status: "open",
+    category: null,
     createdAt: expect.any(String),
   });
   const row = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id as string } });

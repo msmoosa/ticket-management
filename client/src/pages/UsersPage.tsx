@@ -21,7 +21,11 @@ const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 export default function UsersPage() {
   const { data: session } = authClient.useSession();
-  const { data: users, error, isPending } = useQuery({
+  const {
+    data: users,
+    error,
+    isPending,
+  } = useQuery({
     queryKey: ["users"],
     queryFn: async ({ signal }) => {
       const { data } = await api.get<{ users: User[] }>("/users", { signal });
@@ -75,7 +79,10 @@ export default function UsersPage() {
                 ))
               ) : users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
+                  <TableCell
+                    colSpan={6}
+                    className="text-center text-muted-foreground"
+                  >
                     No users yet.
                   </TableCell>
                 </TableRow>
@@ -85,7 +92,11 @@ export default function UsersPage() {
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      <Badge variant={user.role === "admin" ? "default" : "secondary"}>
+                      <Badge
+                        variant={
+                          user.role === "admin" ? "default" : "secondary"
+                        }
+                      >
                         {user.role === "admin" ? "Admin" : "Agent"}
                       </Badge>
                     </TableCell>

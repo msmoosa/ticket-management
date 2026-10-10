@@ -31,6 +31,7 @@ const ticketSelect = {
   fromEmail: true,
   fromName: true,
   status: true,
+  category: true,
   createdAt: true,
 } as const;
 

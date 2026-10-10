@@ -7,6 +7,7 @@ import { queryClient } from "./lib/query-client.ts";
 import HomePage from "./pages/HomePage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import NotFoundPage from "./pages/NotFoundPage.tsx";
+import TicketsPage from "./pages/TicketsPage.tsx";
 import UsersPage from "./pages/UsersPage.tsx";
 
 export default function App() {
@@ -27,6 +28,11 @@ export default function App() {
           <Link to="/" className="font-semibold">
             Ticket Management
           </Link>
+          {session && (
+            <Link to="/tickets" className="text-sm text-gray-600 hover:text-gray-900">
+              Tickets
+            </Link>
+          )}
           {session?.user.role === "admin" && (
             <Link to="/users" className="text-sm text-gray-600 hover:text-gray-900">
               Users
@@ -53,6 +59,7 @@ export default function App() {
           </Route>
           <Route element={<RequireAuth />}>
             <Route index element={<HomePage />} />
+            <Route path="tickets" element={<TicketsPage />} />
             <Route element={<RequireAdmin />}>
               <Route path="users" element={<UsersPage />} />
             </Route>

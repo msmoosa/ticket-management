@@ -1,3 +1,7 @@
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { parseEnv } from "node:util";
 import {
   test as base,
   expect,
@@ -89,7 +93,103 @@ export const dashboardHeading = (page: Page) =>
 /** The login form is showing (its Email field is the stable marker). */
 export const loginEmailField = (page: Page) => page.getByLabel("Email");
 
+export const ticketsNavLink = (page: Page) => header(page).getByRole("link", { name: "Tickets" });
+export const ticketsHeading = (page: Page) =>
+  page.getByRole("heading", { name: "Tickets", level: 1 });
+
+export type TicketStatus = "open" | "resolved" | "closed";
+export type TicketCategory = "general_question" | "technical_question" | "refund_request";
+
+/** A ticket as returned by the inbound email webhook (and, minus `body`, by GET /api/tickets). */
+export interface Ticket {
+  id: string;
+  subject: string;
+  fromEmail: string;
+  fromName: string | null;
+  status: TicketStatus;
+  /** Null until the ticket is classified (webhook-created tickets are always null). */
+  category: TicketCategory | null;
+  createdAt: string;
+}
+
+export interface InboundEmail {
+  from?: string;
+  fromName?: string;
+  subject?: string;
+  text?: string;
+  messageId?: string;
+}
+
+/** The env the e2e API server runs with (server/.env.test). */
+type ServerEnv = {
+  DATABASE_URL: string;
+  SUPPORT_EMAIL: string;
+  INBOUND_EMAIL_SECRET: string;
+};
+
+function readServerEnv(configFile: string | undefined): ServerEnv {
+  const root = configFile ? path.dirname(configFile) : process.cwd();
+  const env = parseEnv(readFileSync(path.join(root, "server/.env.test"), "utf8"));
+  const pick = (key: keyof ServerEnv) => {
+    const value = env[key];
+    if (!value) throw new Error(`${key} is not set in server/.env.test`);
+    return value;
+  };
+  return {
+    DATABASE_URL: pick("DATABASE_URL"),
+    SUPPORT_EMAIL: pick("SUPPORT_EMAIL"),
+    INBOUND_EMAIL_SECRET: pick("INBOUND_EMAIL_SECRET"),
+  };
+}
+
+// There's no ticket delete or update API yet, so tests remove their tickets (and set fields no
+// API sets, like `category`) straight in the test DB, with Bun's built-in Postgres client (as
+// global-setup also shells out to bun). The script refuses to touch a database not named *_test.
+const TICKET_DB_SCRIPT = `
+const url = process.env.DATABASE_URL;
+if (!new URL(url).pathname.slice(1).endsWith("_test")) throw new Error("Refusing to touch a non-test database");
+const op = JSON.parse(process.env.TICKET_OP);
+const sql = new Bun.SQL(url);
+if (op.kind === "delete") {
+  for (const id of op.ids) await sql\`DELETE FROM "ticket" WHERE "id" = \${id}\`;
+} else if (op.kind === "setCategory") {
+  const rows = await sql\`UPDATE "ticket" SET "category" = \${op.category}::"TicketCategory" WHERE "id" = \${op.id} RETURNING "id"\`;
+  if (rows.length !== 1) throw new Error("No ticket " + op.id);
+}
+await sql.close();
+`;
+
+type TicketDbOp =
+  | { kind: "delete"; ids: string[] }
+  | { kind: "setCategory"; id: string; category: TicketCategory | null };
+
+function runTicketDbOp(databaseUrl: string, op: TicketDbOp) {
+  execFileSync("bun", ["-e", TICKET_DB_SCRIPT], {
+    env: { ...process.env, DATABASE_URL: databaseUrl, TICKET_OP: JSON.stringify(op) },
+    stdio: ["ignore", "inherit", "inherit"],
+  });
+}
+
+function deleteTickets(databaseUrl: string, ids: string[]) {
+  if (ids.length === 0) return;
+  runTicketDbOp(databaseUrl, { kind: "delete", ids });
+}
+
+type WorkerFixtures = {
+  serverEnv: ServerEnv;
+};
+
 type Fixtures = {
+  /**
+   * Create a ticket by posting an email to the inbound email webhook (as the email provider
+   * would). Defaults give a unique subject, sender and Message-ID. Deleted again after the test.
+   */
+  createTicket: (email?: InboundEmail) => Promise<Ticket>;
+  /**
+   * Set a ticket's category directly in the test DB (no API sets it until AI classification
+   * lands). Only use on tickets this test created.
+   */
+  setTicketCategory: (id: string, category: TicketCategory | null) => void;
   /** A standalone API context signed in as the seeded admin (separate from `page`'s cookies). */
   adminApi: APIRequestContext;
   /** Create a user (default role: agent) via the admin API; removed again after the test. */
@@ -102,7 +202,43 @@ type Fixtures = {
   agentPage: Page;
 };
 
-export const test = base.extend<Fixtures>({
+export const test = base.extend<Fixtures, WorkerFixtures>({
+  serverEnv: [
+    async ({}, use, workerInfo) => {
+      await use(readServerEnv(workerInfo.config.configFile));
+    },
+    { scope: "worker" },
+  ],
+
+  createTicket: async ({ request, serverEnv }, use) => {
+    const created: string[] = [];
+    await use(async (email = {}) => {
+      const tag = crypto.randomUUID();
+      const res = await request.post("/api/webhooks/inbound-email", {
+        headers: { "X-Webhook-Secret": serverEnv.INBOUND_EMAIL_SECRET },
+        data: {
+          from: email.from ?? `student-${tag}@example.com`,
+          fromName: email.fromName,
+          to: [serverEnv.SUPPORT_EMAIL],
+          subject: email.subject ?? `Help needed ${tag}`,
+          text: email.text ?? "I can't access my course materials.",
+          messageId: email.messageId ?? `<e2e-${tag}@example.com>`,
+        },
+      });
+      expect(res.status(), `create ticket: ${await res.text()}`).toBe(201);
+      const { ticket } = (await res.json()) as { ticket: Ticket };
+      created.push(ticket.id);
+      return ticket;
+    });
+    deleteTickets(serverEnv.DATABASE_URL, created);
+  },
+
+  setTicketCategory: async ({ serverEnv }, use) => {
+    await use((id, category) =>
+      runTicketDbOp(serverEnv.DATABASE_URL, { kind: "setCategory", id, category }),
+    );
+  },
+
   adminApi: async ({ baseURL }, use) => {
     const api = await playwrightRequest.newContext({ baseURL });
     await apiSignIn(api, ADMIN);

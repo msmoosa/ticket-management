@@ -33,6 +33,7 @@ Bun workspaces monorepo (`client`, `server`).
   - `src/components/ui/` — shadcn components (generated; add more with `bunx --bun shadcn@latest add <name>` from `client/`); `src/lib/utils.ts` exports `cn`
   - `src/App.tsx` — layout and route table
   - `src/pages/` — one component per route
+  - `src/lib/users.ts` / `src/lib/tickets.ts` — shared API types (`User`, `TicketSummary`, `ticketStatusLabel`, `ticketCategoryLabel`)
   - `src/lib/auth-client.ts` — Better Auth React client (`authClient.useSession()`, `signIn.email`, `signOut`)
   - `src/components/RequireAuth.tsx` wraps signed-in routes (redirects to `/login`); `RequireAdmin.tsx` nests inside it for admin-only routes (redirects non-admins to `/`); `GuestOnly.tsx` wraps `/login`
   - Vite proxies `/api/*` to `http://localhost:3000`, so the client calls relative `/api/...` URLs and CORS is not needed in dev
@@ -49,6 +50,7 @@ Bun workspaces monorepo (`client`, `server`).
   - `POST /api/users` — admin-only; creates an agent from `{ name, email, password }` (zod-validated: name ≥ 3, password ≥ 8; 409 on duplicate email) via `auth.api.createUser`. Used by `client/src/components/CreateUserDialog.tsx` on the users page
   - `PATCH /api/users/:id` — admin-only; updates `{ name, email, password? }` (same rules; omit `password` to keep it; 404 unknown user, 409 email taken) via `auth.api.adminUpdateUser` / `setUserPassword`, which need the admin's request `headers` (unlike `createUser`). Used by `client/src/components/EditUserDialog.tsx`; both dialogs render the shared `UserForm.tsx`
   - `DELETE /api/users/:id` — admin-only **soft delete** (204; 404 if unknown or already deleted): sets `User.deletedAt` and deletes the user's sessions. Any admin can delete any user, including admins and themselves (the client then signs out). Deleted users are hidden from `GET /api/users`, 404 on `PATCH`, can't sign in (session-create hook in `auth.ts`), and keep their email reserved (409 "This email belongs to a deleted user"). Any new user query should filter `deletedAt: null`. UI: `client/src/components/DeleteUserDialog.tsx` (shadcn `alert-dialog`)
+  - `GET /api/tickets` — any signed-in user (agents and admins); `{ tickets }` with `id`, `subject`, `fromEmail`, `fromName`, `status`, `category`, `createdAt` (no body), newest first (`createdAt` desc, then `id`). Rendered by `client/src/pages/TicketsPage.tsx` at `/tickets` (nav link for every signed-in user)
   - `POST /api/webhooks/inbound-email` — turns an email sent to the support address into an `open` `Ticket` (see Inbound email below)
   - `src/db.ts` — the shared `prisma` client; import it, never create another `PrismaClient`
   - `prisma/schema.prisma` — data models; `prisma/seed.ts` — seed script; `src/generated/prisma/` — generated client (gitignored)
@@ -166,7 +168,7 @@ Email sent to the support address becomes a ticket. No email provider is wired u
 - It returns 201 `{ ticket }` for a new ticket. A repeated `messageId` returns 200 with the existing ticket, so provider retries don't duplicate. Every email creates a new ticket (no reply threading yet); `Ticket.messageId` is stored for that.
 - Adding a provider (SendGrid/Mailgun): write a route that verifies the provider's signature, maps its payload to this shape, and calls the exported `createTicketFromEmail`.
 - Local testing: with `bun run dev` running, `bun run email:simulate` (in `server/`) posts a sample email; pass `--from`, `--name`, `--subject`, `--text` or `--message-id` to vary it.
-- `Ticket` (`prisma/schema.prisma`): `subject`, plain-text `body`, `fromEmail`, `fromName`, unique `messageId`, `status` (`TicketStatus` enum: `open` | `resolved` | `closed`, default `open`).
+- `Ticket` (`prisma/schema.prisma`): `subject`, plain-text `body`, `fromEmail`, `fromName`, unique `messageId`, `status` (`TicketStatus` enum: `open` | `resolved` | `closed`, default `open`). `category` is the nullable `TicketCategory` enum (`general_question` | `technical_question` | `refund_request`; labels in `client/src/lib/tickets.ts`). Inbound email leaves it null (shown as "Uncategorized") until something classifies the ticket; nothing sets it yet.
 
 ## Planned but not yet added
 
