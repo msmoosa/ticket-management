@@ -342,3 +342,14 @@ test("DELETE /api/users/:id lets an admin delete themselves, ending their sessio
   const me = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: cookie } });
   expect(me.status).toBe(401);
 });
+
+test("malformed JSON on an app route returns 400, not 500", async () => {
+  const cookie = await signIn(admin.email);
+  const res = await fetch(`${baseUrl}/api/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: '{"name": oops',
+  });
+  expect(res.status).toBe(400);
+  expect(await res.json()).toEqual({ error: "Malformed JSON body" });
+});

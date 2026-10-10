@@ -82,3 +82,27 @@ model Verification {
   @@index([identifier])
   @@map("verification")
 }
+
+enum TicketStatus {
+  open
+  resolved
+  closed
+}
+
+model Ticket {
+  id        String       @id @default(cuid())
+  subject   String
+  // Plain text (HTML-only emails are converted on intake).
+  body      String
+  // Lowercased sender address.
+  fromEmail String
+  fromName  String?
+  // RFC 5322 Message-ID: dedupes provider retries and enables reply threading later.
+  messageId String?      @unique
+  status    TicketStatus @default(open)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([status, createdAt])
+  @@map("ticket")
+}
