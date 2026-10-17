@@ -113,10 +113,12 @@ export default function UsersPage() {
                     <TableCell>
                       <div className="flex justify-end gap-1">
                         <EditUserDialog user={user} />
-                        <DeleteUserDialog
-                          user={user}
-                          isCurrentUser={user.id === session?.user.id}
-                        />
+                        {user.role !== "admin" && (
+                          <DeleteUserDialog
+                            user={user}
+                            isCurrentUser={user.id === session?.user.id}
+                          />
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
