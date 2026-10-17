@@ -161,6 +161,13 @@ test("GET /api/tickets/stats buckets days in the requested time zone", async () 
   expect(countOn(afterTz, tzDay)! - countOn(beforeTz, tzDay)!).toBe(1);
 });
 
+test("GET /api/tickets/stats accepts legacy zone names that browsers still report", async () => {
+  // Some Postgres builds don't know "Asia/Calcutta" (now "Asia/Kolkata"); this once failed with
+  // a 500 in production.
+  const s = await stats(`?tz=${encodeURIComponent("Asia/Calcutta")}`);
+  expect(s.perDay.at(-1)!.date).toBe(localDay(new Date(), "Asia/Kolkata"));
+});
+
 test("GET /api/tickets/stats rejects an invalid range or time zone", async () => {
   for (const query of ["?days=0", "?days=91", "?days=abc", "?tz=Mars/Olympus"]) {
     const res = await fetch(`${baseUrl}/api/tickets/stats${query}`, { headers: { Cookie: cookie } });

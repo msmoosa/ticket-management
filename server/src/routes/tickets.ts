@@ -143,6 +143,37 @@ function isTimeZone(tz: string) {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** YYYY-MM-DD of the calendar date `days` before the YYYY-MM-DD `day`. */
+function daysBefore(day: string, days: number) {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d! - days)).toISOString().slice(0, 10);
+}
+
+// Tickets received per day in `tz` for the last `days` days, oldest first, ending today. Days
+// are bucketed here with `Intl` rather than in SQL: Postgres doesn't know every zone name a
+// browser reports (e.g. the legacy "Asia/Calcutta").
+async function ticketsPerDay(days: number, tz: string) {
+  // en-CA formats dates as YYYY-MM-DD.
+  const dayOf = new Intl.DateTimeFormat("en-CA", { timeZone: tz });
+  const now = new Date();
+  const today = dayOf.format(now);
+  const counts = new Map(
+    Array.from({ length: days }, (_, i) => [daysBefore(today, days - 1 - i), 0]),
+  );
+
+  // The first day started less than `days` days (plus a DST hour) ago in any zone.
+  const tickets = await prisma.ticket.findMany({
+    where: { createdAt: { gte: new Date(now.getTime() - (days + 1) * DAY_MS) } },
+    select: { createdAt: true },
+  });
+  for (const { createdAt } of tickets) {
+    const day = dayOf.format(createdAt);
+    const count = counts.get(day);
+    if (count !== undefined) counts.set(day, count + 1);
+  }
+  return [...counts].map(([date, count]) => ({ date, count }));
+}
+
 // Numbers for the dashboard: tickets per status and category, open tickets whose sender has
 // waited a day or more, and tickets received per day for the last `days` days (oldest first,
 // including days with none). Declared before `/:id`.
@@ -162,19 +193,7 @@ ticketsRouter.get("/stats", requireAuth, async (req, res) => {
         awaitingReplySince: { lte: new Date(Date.now() - DAY_MS) },
       },
     }),
-    // `createdAt` is a UTC timestamp without a zone: read it as UTC, then convert to `tz`.
-    prisma.$queryRaw<{ date: string; count: number }[]>`
-      WITH days AS (
-        SELECT (now() AT TIME ZONE ${tz}::text)::date - i AS day
-        FROM generate_series(0, ${days}::int - 1) AS i
-      )
-      SELECT to_char(days.day, 'YYYY-MM-DD') AS date, count(t.id)::int AS count
-      FROM days
-      LEFT JOIN "ticket" t
-        ON t."createdAt" >= now() AT TIME ZONE 'UTC' - make_interval(days => ${days}::int + 1)
-        AND ((t."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${tz}::text)::date = days.day
-      GROUP BY days.day
-      ORDER BY days.day`,
+    ticketsPerDay(days, tz),
   ]);
 
   const status = Object.fromEntries(Object.values(TicketStatus).map((s) => [s, 0])) as Record<
