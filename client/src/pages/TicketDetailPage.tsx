@@ -1,19 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router";
-import TicketAssignee from "@/components/TicketAssignee";
-import TicketCategorySelect from "@/components/TicketCategorySelect";
-import TicketStatusSelect from "@/components/TicketStatusSelect";
+import TicketDetail from "@/components/TicketDetail";
+import TicketProperties from "@/components/TicketProperties";
+import TicketReplies from "@/components/TicketReplies";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, apiErrorMessage } from "@/lib/api";
 import type { Ticket } from "@/lib/tickets";
-
-const receivedFormat = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 
 function TicketDetailSkeleton() {
   return (
@@ -58,64 +52,19 @@ export default function TicketDetailPage() {
       ) : !ticket ? (
         <TicketDetailSkeleton />
       ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
-          <div className="space-y-6">
-            <h1 className="text-2xl font-bold break-words">{ticket.subject}</h1>
-
-            <dl className="grid gap-4 text-sm sm:grid-cols-2">
-              <div className="space-y-1">
-                <dt className="text-muted-foreground">From</dt>
-                <dd>
-                  {ticket.fromName ? (
-                    <>
-                      {ticket.fromName}{" "}
-                      <span className="text-muted-foreground">&lt;{ticket.fromEmail}&gt;</span>
-                    </>
-                  ) : (
-                    ticket.fromEmail
-                  )}
-                </dd>
-              </div>
-              <div className="space-y-1">
-                <dt className="text-muted-foreground">Received</dt>
-                <dd>{receivedFormat.format(new Date(ticket.createdAt))}</dd>
-              </div>
-            </dl>
-
-            <Card>
-              <CardContent>
-                <p className="text-sm break-words whitespace-pre-wrap">{ticket.body}</p>
-              </CardContent>
-            </Card>
+        // Below `lg` everything stacks, with the properties panel between the sender details and
+        // the message. On wide screens the panel is a side column spanning every row (the last,
+        // `1fr` row absorbs its height) and the rest stays in the left column.
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_16rem] lg:grid-rows-[auto_auto_1fr]">
+          <TicketDetail ticket={ticket}>
+            <TicketProperties
+              ticket={ticket}
+              className="lg:col-start-2 lg:row-span-3 lg:row-start-1"
+            />
+          </TicketDetail>
+          <div className="lg:col-start-1">
+            <TicketReplies ticket={ticket} />
           </div>
-
-          {/* Editable fields, in a side column on wide screens and below the message otherwise. */}
-          <aside aria-label="Ticket properties">
-            <Card>
-              <CardContent>
-                <dl className="space-y-4 text-sm">
-                  <div className="space-y-1.5">
-                    <dt className="text-muted-foreground">Status</dt>
-                    <dd>
-                      <TicketStatusSelect ticket={ticket} />
-                    </dd>
-                  </div>
-                  <div className="space-y-1.5">
-                    <dt className="text-muted-foreground">Category</dt>
-                    <dd>
-                      <TicketCategorySelect ticket={ticket} />
-                    </dd>
-                  </div>
-                  <div className="space-y-1.5">
-                    <dt className="text-muted-foreground">Assigned to</dt>
-                    <dd>
-                      <TicketAssignee ticket={ticket} />
-                    </dd>
-                  </div>
-                </dl>
-              </CardContent>
-            </Card>
-          </aside>
         </div>
       )}
     </div>

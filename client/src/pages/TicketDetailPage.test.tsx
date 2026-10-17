@@ -30,6 +30,7 @@ function mockTicket(response: Parameters<typeof HttpResponse.json>[0], status = 
   server.use(
     http.get("/api/tickets/t1", () => HttpResponse.json(response, { status })),
     http.get("/api/tickets/assignees", () => HttpResponse.json({ users: assignees })),
+    http.get("/api/tickets/t1/replies", () => HttpResponse.json({ replies: [] })),
   );
 }
 
@@ -85,7 +86,7 @@ describe("TicketDetailPage", () => {
     }).format(new Date(ticket.createdAt));
     expect(screen.getByText(received)).toBeInTheDocument();
     expect(screen.getByText(/The lesson 3 video shows a black screen/)).toBeInTheDocument();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "Loading ticket" })).not.toBeInTheDocument();
   });
 
   test("shows an unnamed sender's email and an uncategorized ticket", async () => {
@@ -224,5 +225,27 @@ describe("TicketDetailPage", () => {
     }
     expect(panel.queryByText(/The lesson 3 video shows a black screen/)).not.toBeInTheDocument();
     expect(panel.queryByText("Sam Student")).not.toBeInTheDocument();
+  });
+
+  test("puts the properties panel after the sender details and before the message", async () => {
+    mockTicket({ ticket });
+    renderPage();
+    const panel = await screen.findByRole("complementary", { name: "Ticket properties" });
+
+    // Narrow screens stack in document order, so this keeps the selects near the top.
+    const follows = (a: Node, b: Node) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(screen.getByText("Received"), panel)).toBe(true);
+    expect(follows(panel, screen.getByText(/The lesson 3 video shows a black screen/))).toBe(true);
+  });
+
+  test("shows the reply thread and form below the message", async () => {
+    mockTicket({ ticket });
+    renderPage();
+    const replies = within(await screen.findByRole("region", { name: "Replies" }));
+
+    expect(await replies.findByText("No replies yet.")).toBeInTheDocument();
+    expect(replies.getByRole("textbox", { name: "Reply" })).toBeInTheDocument();
+    expect(replies.getByRole("button", { name: "Send reply" })).toBeInTheDocument();
   });
 });

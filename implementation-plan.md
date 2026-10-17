@@ -47,7 +47,7 @@
 - [ ] Set up email provider (SendGrid/Mailgun)
 - [x] Implement inbound email webhook to create tickets (provider-neutral; provider adapter pending)
 - [ ] Implement outbound email sending when an agent replies
-- [ ] Handle email threading (replies linked to existing tickets)
+- [x] Handle email threading (replies linked to existing tickets)
 
 ## Phase 7: Dashboard
 

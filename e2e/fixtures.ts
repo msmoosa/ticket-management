@@ -142,8 +142,9 @@ function readServerEnv(configFile: string | undefined): ServerEnv {
   };
 }
 
-// There's no ticket delete or update API yet, so tests remove their tickets (and set fields no
-// API sets, like `category`) straight in the test DB, with Bun's built-in Postgres client (as
+// There's no ticket delete API yet, so tests remove their tickets straight in the test DB (and,
+// to set up list data quickly, set `status` / `category` there too; PATCH /api/tickets/:id and
+// the detail page's selects are covered by ticket-status-category.spec.ts), with Bun's built-in Postgres client (as
 // global-setup also shells out to bun). The script refuses to touch a database not named *_test.
 const TICKET_DB_SCRIPT = `
 const url = process.env.DATABASE_URL;
@@ -190,13 +191,13 @@ type Fixtures = {
    */
   createTicket: (email?: InboundEmail) => Promise<Ticket>;
   /**
-   * Set a ticket's category directly in the test DB (no API sets it until AI classification
-   * lands). Only use on tickets this test created.
+   * Set a ticket's category directly in the test DB (fast setup for list tests). Only use on
+   * tickets this test created.
    */
   setTicketCategory: (id: string, category: TicketCategory | null) => void;
   /**
-   * Set a ticket's status directly in the test DB (there's no update-ticket API yet). Only use
-   * on tickets this test created.
+   * Set a ticket's status directly in the test DB (fast setup for list tests). Only use on
+   * tickets this test created.
    */
   setTicketStatus: (id: string, status: TicketStatus) => void;
   /** A standalone API context signed in as the seeded admin (separate from `page`'s cookies). */

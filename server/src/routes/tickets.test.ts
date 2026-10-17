@@ -517,3 +517,75 @@ test("PATCH /api/tickets/:id changes nothing when the assignee is invalid", asyn
   expect(res.status).toBe(400);
   expect(await middleTicket()).toEqual(before);
 });
+
+type Reply = { id: string; body: string; author: { id: string; name: string } | null; createdAt: string };
+
+async function postReply(ticketId: string, body: unknown, cookie?: string) {
+  return fetch(`${baseUrl}/api/tickets/${ticketId}/replies`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+    body: JSON.stringify(body),
+  });
+}
+
+async function listReplies(ticketId: string, cookie: string) {
+  const res = await fetch(`${baseUrl}/api/tickets/${ticketId}/replies`, {
+    headers: { Cookie: cookie },
+  });
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { replies: Reply[] }).replies;
+}
+
+test("ticket replies require a session", async () => {
+  const ticket = await middleTicket();
+  expect((await fetch(`${baseUrl}/api/tickets/${ticket.id}/replies`)).status).toBe(401);
+  expect((await postReply(ticket.id, { body: "Hi" })).status).toBe(401);
+});
+
+test("POST /api/tickets/:id/replies adds a trimmed reply by the signed-in user, listed oldest first", async () => {
+  const ticket = await prisma.ticket.findFirstOrThrow({ where: { subject: `Newest [${run}]` } });
+  expect(await listReplies(ticket.id, await signIn(agent.email))).toEqual([]);
+
+  const agentCookie = await signIn(agent.email);
+  const first = await postReply(ticket.id, { body: "  Have you tried another browser?\n" }, agentCookie);
+  expect(first.status).toBe(201);
+  const { reply } = (await first.json()) as { reply: Reply };
+  expect(reply).toMatchObject({
+    sender: "agent",
+    body: "Have you tried another browser?",
+    author: { id: userIds.agent, name: agent.name },
+  });
+
+  const adminCookie = await signIn(admin.email);
+  expect((await postReply(ticket.id, { body: "Following up." }, adminCookie)).status).toBe(201);
+
+  const replies = await listReplies(ticket.id, agentCookie);
+  expect(replies.map((r) => [r.body, r.author?.name])).toEqual([
+    ["Have you tried another browser?", agent.name],
+    ["Following up.", admin.name],
+  ]);
+  expect(replies[0]).toEqual(reply);
+});
+
+test("POST /api/tickets/:id/replies rejects an empty or too long reply", async () => {
+  const cookie = await signIn(agent.email);
+  const ticket = await middleTicket();
+
+  for (const body of [{}, { body: "   " }, { body: 42 }, { body: "x".repeat(10_001) }]) {
+    expect((await postReply(ticket.id, body, cookie)).status).toBe(400);
+  }
+  const res = await postReply(ticket.id, { body: " " }, cookie);
+  expect(await res.json()).toEqual({ error: "Reply can't be empty" });
+  expect(await prisma.ticketReply.count({ where: { ticketId: ticket.id } })).toBe(0);
+});
+
+test("ticket replies return 404 for an unknown ticket", async () => {
+  const cookie = await signIn(agent.email);
+  const list = await fetch(`${baseUrl}/api/tickets/no-such-ticket/replies`, {
+    headers: { Cookie: cookie },
+  });
+  expect(list.status).toBe(404);
+  const post = await postReply("no-such-ticket", { body: "Hello" }, cookie);
+  expect(post.status).toBe(404);
+  expect(await post.json()).toEqual({ error: "Ticket not found" });
+});

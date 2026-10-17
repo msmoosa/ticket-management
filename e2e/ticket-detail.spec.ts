@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, loginEmailField, signInViaForm, test, ticketsHeading } from "./fixtures.ts";
 
 // The ticket detail page (/tickets/:id) is opened from the subject link on the tickets list and
@@ -14,7 +14,12 @@ const detail = (page: Page, label: string) =>
     .locator("dl > div")
     .filter({ has: page.getByRole("term").filter({ hasText: label }) })
     .getByRole("definition");
+/** The list's status filter, or the detail page's status select (both are named "Status"). */
 const statusSelect = (page: Page) => page.getByRole("combobox", { name: "Status" });
+const categorySelect = (page: Page) => page.getByRole("combobox", { name: "Category" });
+/** The label a select trigger shows (the trigger's own text also includes its chevron). */
+const selectedValue = (select: Locator) =>
+  select.locator('[data-slot="select-value"]');
 const columnHeader = (page: Page, name: string) =>
   page.getByRole("columnheader", { name, exact: true });
 
@@ -61,8 +66,8 @@ test.describe("ticket detail page", () => {
 
     await expect(page).toHaveURL(`/tickets/${ticket.id}`);
     await expect(subjectHeading(page, ticket.subject)).toBeVisible();
-    await expect(page.getByText("Open", { exact: true })).toBeVisible();
-    await expect(page.getByText("Technical", { exact: true })).toBeVisible();
+    await expect(selectedValue(statusSelect(page))).toHaveText("Open");
+    await expect(selectedValue(categorySelect(page))).toHaveText("Technical");
     await expect(detail(page, "From")).toHaveText(`Ada Student <${email}>`);
     await expect(detail(page, "Received")).toHaveText(await formatReceived(page, ticket.createdAt));
     const body = page.getByText("The quiz page shows a blank screen.");
@@ -86,8 +91,8 @@ test.describe("ticket detail page", () => {
     await page.goto(`/tickets/${ticket.id}`);
 
     await expect(subjectHeading(page, ticket.subject)).toBeVisible();
-    await expect(page.getByText("Resolved", { exact: true })).toBeVisible();
-    await expect(page.getByText("Uncategorized", { exact: true })).toBeVisible();
+    await expect(selectedValue(statusSelect(page))).toHaveText("Resolved");
+    await expect(selectedValue(categorySelect(page))).toHaveText("Uncategorized");
     await expect(detail(page, "From")).toHaveText(ticket.fromEmail);
     await expect(page.getByText("Where is my refund?")).toBeVisible();
   });
@@ -124,7 +129,7 @@ test.describe("ticket detail page", () => {
 
     await backLink(page).click();
     await expectTicketsUrl(page, expected);
-    await expect(statusSelect(page).locator('[data-slot="select-value"]')).toHaveText("Resolved");
+    await expect(selectedValue(statusSelect(page))).toHaveText("Resolved");
     await expect(columnHeader(page, "Subject")).toHaveAttribute("aria-sort", "ascending");
     await expect(page.getByRole("searchbox", { name: "Search tickets" })).toHaveValue(tag);
     const subjects = page.getByRole("row").filter({ hasText: tag }).getByRole("link");

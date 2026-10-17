@@ -80,3 +80,18 @@ export type TicketListResponse = {
   page: number;
   pageSize: number;
 };
+
+// A message in a ticket's thread, as returned by GET /api/tickets/:id/replies (oldest first)
+// and POST /api/tickets/:id/replies (always an agent reply).
+export type TicketReply = {
+  id: string;
+  /** `customer` replies were emailed in by the ticket's sender (`fromName` / `fromEmail`). */
+  sender: "agent" | "customer";
+  body: string;
+  /** The agent who wrote it: null for customer replies, or if the agent's account was removed. */
+  author: { id: string; name: string } | null;
+  createdAt: string;
+};
+
+/** Longest reply the server accepts. */
+export const maxReplyLength = 10_000;

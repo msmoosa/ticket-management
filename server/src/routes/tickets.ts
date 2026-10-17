@@ -178,3 +178,54 @@ ticketsRouter.patch<{ id: string }>("/:id", requireAuth, async (req, res) => {
   });
   res.json({ ticket });
 });
+
+const replySelect = {
+  id: true,
+  // `customer` replies were emailed in by the ticket's sender and have no author.
+  sender: true,
+  body: true,
+  author: { select: { id: true, name: true } },
+  createdAt: true,
+} satisfies Prisma.TicketReplySelect;
+
+async function assertTicketExists(id: string) {
+  const ticket = await prisma.ticket.findUnique({ where: { id }, select: { id: true } });
+  if (!ticket) throw new HttpError(404, "Ticket not found");
+}
+
+// A ticket's reply thread, oldest first. Any signed-in user.
+ticketsRouter.get<{ id: string }>("/:id/replies", requireAuth, async (req, res) => {
+  await assertTicketExists(req.params.id);
+  const replies = await prisma.ticketReply.findMany({
+    where: { ticketId: req.params.id },
+    select: replySelect,
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+  res.json({ replies });
+});
+
+export const MAX_REPLY_LENGTH = 10_000;
+
+const createReplySchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, "Reply can't be empty")
+    .max(MAX_REPLY_LENGTH, `Reply must be at most ${MAX_REPLY_LENGTH} characters`),
+});
+
+// Any signed-in user can reply to any ticket; the reply is authored by them. Replies are only
+// stored for now: they aren't emailed to the sender until outbound email lands.
+ticketsRouter.post<{ id: string }>("/:id/replies", requireAuth, async (req, res) => {
+  const parsed = createReplySchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid request body");
+  }
+  await assertTicketExists(req.params.id);
+
+  const reply = await prisma.ticketReply.create({
+    data: { ticketId: req.params.id, authorId: res.locals.user.id, body: parsed.data.body },
+    select: replySelect,
+  });
+  res.status(201).json({ reply });
+});

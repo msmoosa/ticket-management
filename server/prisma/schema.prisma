@@ -29,8 +29,9 @@ model User {
 
   deletedAt DateTime?
 
-  // Not a Better Auth field: re-add this back-relation if `auth:generate` drops it.
+  // Not Better Auth fields: re-add these back-relations if `auth:generate` drops them.
   assignedTickets Ticket[]
+  ticketReplies   TicketReply[]
 
   @@unique([email])
   @@map("user")
@@ -113,6 +114,7 @@ model Ticket {
   // The agent (or admin) working the ticket; null while unassigned.
   assignedToId String?
   assignedTo   User?   @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  replies   TicketReply[]
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
@@ -120,4 +122,34 @@ model Ticket {
   @@index([category])
   @@index([assignedToId])
   @@map("ticket")
+}
+
+enum TicketReplySender {
+  // Written by an agent (or admin) on the detail page.
+  agent
+  // Emailed by the ticket's sender in reply to the thread (inbound webhook).
+  customer
+}
+
+// A message in a ticket's reply thread (oldest first), after the original email in `Ticket.body`.
+// Agent replies are not emailed to the sender yet: outbound email is planned (Phase 6).
+model TicketReply {
+  id        String            @id @default(cuid())
+  ticketId  String
+  ticket    Ticket            @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender    TicketReplySender @default(agent)
+  // Plain text. Customer replies have the quoted earlier conversation stripped.
+  body      String
+  // The agent who wrote it; always null for customer replies (the sender is the ticket's
+  // `fromEmail`). Users are soft-deleted, so an agent's id survives; null after a hard delete.
+  authorId  String?
+  author    User?             @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  // RFC 5322 Message-ID of an emailed reply: dedupes provider retries and lets later replies
+  // that reference it thread onto the same ticket.
+  messageId String?           @unique
+  createdAt DateTime          @default(now())
+
+  @@index([ticketId, createdAt])
+  @@index([authorId])
+  @@map("ticket_reply")
 }

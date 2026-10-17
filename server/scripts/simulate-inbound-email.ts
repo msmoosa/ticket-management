@@ -1,5 +1,7 @@
 // Posts a sample email to the local inbound email webhook, as an email provider would.
 // Usage: bun run email:simulate [--from addr] [--name "Sender"] [--subject text] [--text body] [--message-id id]
+//        [--in-reply-to id]   (reply to an earlier email's Message-ID: threads onto that ticket when
+//                              --from matches its sender)
 import { parseArgs } from "node:util";
 
 const { values } = parseArgs({
@@ -12,6 +14,7 @@ const { values } = parseArgs({
       default: "Hi, I enrolled yesterday but the course page says I don't have access. Can you help?",
     },
     "message-id": { type: "string" },
+    "in-reply-to": { type: "string" },
   },
 });
 
@@ -33,6 +36,7 @@ const res = await fetch(url, {
     subject: values.subject,
     text: values.text,
     messageId: values["message-id"] ?? `<${crypto.randomUUID()}@simulated.local>`,
+    inReplyTo: values["in-reply-to"],
   }),
 });
 
