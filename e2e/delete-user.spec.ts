@@ -23,7 +23,6 @@ const deleteButton = (page: Page, name: string) =>
 const dialog = (page: Page, name: string) =>
   page.getByRole("alertdialog", { name: `Delete ${name}?` });
 
-const SELF_WARNING = "This is your account, so you'll be signed out too.";
 const description = (email: string) =>
   `${email} will be removed from the users list and signed out, and won't be able to sign in again.`;
 
@@ -52,7 +51,7 @@ async function signInStatus(baseURL: string | undefined, creds: Credentials) {
 }
 
 test.describe("delete user dialog (admin)", () => {
-  test("shows the user's name and email without the self warning", async ({
+  test("shows the user's name and email", async ({
     adminPage: page,
     createUser,
   }) => {
@@ -62,7 +61,6 @@ test.describe("delete user dialog (admin)", () => {
     const d = await openDeleteDialog(page, user);
     await expect(d.getByRole("heading", { name: `Delete ${user.name}?` })).toBeVisible();
     await expect(d.getByText(description(user.email))).toBeVisible();
-    await expect(d.getByText(SELF_WARNING)).toHaveCount(0);
     await expect(d.getByRole("button", { name: "Cancel" })).toBeVisible();
     await expect(d.getByRole("button", { name: "Delete", exact: true })).toBeEnabled();
   });
@@ -130,38 +128,37 @@ test.describe("delete user dialog (admin)", () => {
     expect(await signInStatus(baseURL, user)).toBe(200);
   });
 
-  test("deletes another admin", async ({ adminPage: page, createUser, baseURL }) => {
-    const otherAdmin = await createUser({ role: "admin" });
-
-    const d = await openDeleteDialog(page, otherAdmin);
-    await expect(d.getByText(SELF_WARNING)).toHaveCount(0);
-    await d.getByRole("button", { name: "Delete", exact: true }).click();
-
-    await expect(d).toBeHidden();
-    await expect(userRow(page, otherAdmin.email)).toHaveCount(0);
-    expect(await signInStatus(baseURL, otherAdmin)).toBe(401);
-  });
-
-  test("an admin deleting themselves is warned, signed out, and can't sign back in", async ({
-    page,
+  test("another admin can't be deleted: no button, and the API returns 403", async ({
+    adminPage: page,
+    adminApi,
     createUser,
     baseURL,
   }) => {
+    const otherAdmin = await createUser({ role: "admin" });
+
+    await page.goto("/users");
+    await expect(usersHeading(page)).toBeVisible();
+    await expect(userRow(page, otherAdmin.email)).toBeVisible();
+    await expect(deleteButton(page, otherAdmin.name)).toHaveCount(0);
+
+    const res = await adminApi.delete(`/api/users/${otherAdmin.id}`);
+    expect(res.status()).toBe(403);
+    expect(await res.json()).toEqual({ error: "Admin users can't be deleted" });
+
+    await page.reload();
+    await expect(userRow(page, otherAdmin.email)).toBeVisible();
+    expect(await signInStatus(baseURL, otherAdmin)).toBe(200);
+  });
+
+  test("an admin's own row has no delete button", async ({ page, createUser }) => {
     // A fresh admin, never the seeded one (other tests sign in as it).
     const self = await createUser({ role: "admin" });
     await apiSignIn(page.request, self);
 
-    const d = await openDeleteDialog(page, self);
-    await expect(d.getByText(`${description(self.email)} ${SELF_WARNING}`)).toBeVisible();
-    await d.getByRole("button", { name: "Delete", exact: true }).click();
-
-    await expect(page).toHaveURL(/\/login$/);
-    await expect(loginEmailField(page)).toBeVisible();
-
-    expect(await signInStatus(baseURL, self)).toBe(401);
-    await signInViaForm(page, self);
-    await expect(page.getByRole("alert")).toContainText("Invalid email or password");
-    await expect(page).toHaveURL(/\/login$/);
+    await page.goto("/users");
+    await expect(usersHeading(page)).toBeVisible();
+    await expect(userRow(page, self.email)).toBeVisible();
+    await expect(deleteButton(page, self.name)).toHaveCount(0);
   });
 });
 

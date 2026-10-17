@@ -89,6 +89,17 @@ describe("UsersPage", () => {
     expect(agent.getByText("Active")).toBeInTheDocument();
   });
 
+  test("offers delete for agents but not for admins", async () => {
+    mockUsers({ users });
+    renderWithQuery(<UsersPage />);
+
+    const admin = within(await screen.findByRole("row", { name: /Ada Admin/ }));
+    expect(admin.queryByRole("button", { name: /Delete/ })).not.toBeInTheDocument();
+    expect(admin.getByRole("button", { name: /Edit/ })).toBeInTheDocument();
+    const agent = within(screen.getByRole("row", { name: /Alan Agent/ }));
+    expect(agent.getByRole("button", { name: /Delete/ })).toBeInTheDocument();
+  });
+
   test("shows banned users as Banned", async () => {
     mockUsers({ users });
     renderWithQuery(<UsersPage />);

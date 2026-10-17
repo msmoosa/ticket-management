@@ -341,22 +341,25 @@ describe("after an admin deletes an agent", () => {
   });
 });
 
-test("DELETE /api/users/:id lets an admin delete another admin", async () => {
+test("DELETE /api/users/:id refuses to delete another admin", async () => {
   const doomedAdminId = await createUserId(doomedAdmin, Role.admin);
   const cookie = await signIn(admin.email);
   const res = await deleteUser(doomedAdminId, cookie);
-  expect(res.status).toBe(204);
-  expect((await signInRequest(doomedAdmin.email)).status).toBe(401);
+  expect(res.status).toBe(403);
+  expect(await res.json()).toEqual({ error: "Admin users can't be deleted" });
+  const row = await prisma.user.findUniqueOrThrow({ where: { id: doomedAdminId } });
+  expect(row.deletedAt).toBeNull();
+  expect((await signInRequest(doomedAdmin.email)).status).toBe(200);
 });
 
-test("DELETE /api/users/:id lets an admin delete themselves, ending their session", async () => {
+test("DELETE /api/users/:id refuses to let an admin delete themselves", async () => {
   const selfId = await createUserId(selfDeleter, Role.admin);
   const cookie = await signIn(selfDeleter.email);
   const res = await deleteUser(selfId, cookie);
-  expect(res.status).toBe(204);
+  expect(res.status).toBe(403);
 
   const me = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: cookie } });
-  expect(me.status).toBe(401);
+  expect(me.status).toBe(200);
 });
 
 test("malformed JSON on an app route returns 400, not 500", async () => {
