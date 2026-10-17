@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router";
+import TicketAssignee from "@/components/TicketAssignee";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -93,6 +94,12 @@ export default function TicketDetailPage() {
             <div className="space-y-1">
               <dt className="text-muted-foreground">Received</dt>
               <dd>{receivedFormat.format(new Date(ticket.createdAt))}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-muted-foreground">Assigned to</dt>
+              <dd>
+                <TicketAssignee ticket={ticket} />
+              </dd>
             </div>
           </dl>
 

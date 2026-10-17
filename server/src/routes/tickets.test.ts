@@ -11,7 +11,15 @@ let baseUrl: string;
 const run = crypto.randomUUID();
 const admin = { email: `tickets-admin-${run}@example.com`, name: "Tickets Admin" };
 const agent = { email: `tickets-agent-${run}@example.com`, name: "Tickets Agent" };
+const banned = { email: `tickets-banned-${run}@example.com`, name: "Tickets Banned" };
+const deleted = { email: `tickets-deleted-${run}@example.com`, name: "Tickets Deleted" };
 const password = "correct-horse-battery";
+const userIds: Record<"admin" | "agent" | "banned" | "deleted", string> = {
+  admin: "",
+  agent: "",
+  banned: "",
+  deleted: "",
+};
 
 // Created out of order on purpose; `createdAt` decides the expected order.
 const seeded = [
@@ -40,8 +48,12 @@ beforeAll(async () => {
   const { port } = server.address() as AddressInfo;
   baseUrl = `http://localhost:${port}`;
 
-  await auth.api.createUser({ body: { ...admin, password, role: Role.admin } });
-  await auth.api.createUser({ body: { ...agent, password } });
+  userIds.admin = (await auth.api.createUser({ body: { ...admin, password, role: Role.admin } })).user.id;
+  userIds.agent = (await auth.api.createUser({ body: { ...agent, password } })).user.id;
+  userIds.banned = (await auth.api.createUser({ body: { ...banned, password } })).user.id;
+  userIds.deleted = (await auth.api.createUser({ body: { ...deleted, password } })).user.id;
+  await prisma.user.update({ where: { id: userIds.banned }, data: { banned: true } });
+  await prisma.user.update({ where: { id: userIds.deleted }, data: { deletedAt: new Date() } });
   await prisma.ticket.createMany({
     data: seeded.map((t) => ({
       body: "Body",
@@ -54,7 +66,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.ticket.deleteMany({ where: { subject: { contains: run } } });
-  await prisma.user.deleteMany({ where: { email: { in: [admin.email, agent.email] } } });
+  await prisma.user.deleteMany({
+    where: { email: { in: [admin.email, agent.email, banned.email, deleted.email] } },
+  });
   server.close();
 });
 
@@ -297,6 +311,7 @@ test("GET /api/tickets/:id returns the ticket with its body", async () => {
       fromName: `Olive Older-${run}`,
       status: TicketStatus.closed,
       category: null,
+      assignedTo: null,
       createdAt: "2026-05-01T10:00:00.000Z",
       updatedAt: stored.updatedAt.toISOString(),
     },
@@ -309,4 +324,111 @@ test("GET /api/tickets/:id returns 404 for an unknown ticket", async () => {
   });
   expect(res.status).toBe(404);
   expect(await res.json()).toEqual({ error: "Ticket not found" });
+});
+
+test("GET /api/tickets/assignees lists active users only, by name", async () => {
+  const res = await fetch(`${baseUrl}/api/tickets/assignees`, {
+    headers: { Cookie: await signIn(agent.email) },
+  });
+  expect(res.status).toBe(200);
+  const { users } = (await res.json()) as { users: { id: string; name: string; email: string }[] };
+  const ours = users.filter((u) => u.email.includes(run));
+  expect(ours).toEqual([
+    { id: userIds.admin, name: admin.name, email: admin.email },
+    { id: userIds.agent, name: agent.name, email: agent.email },
+  ]);
+});
+
+test("GET /api/tickets/assignees without a session returns 401", async () => {
+  expect((await fetch(`${baseUrl}/api/tickets/assignees`)).status).toBe(401);
+});
+
+function patchTicket(ticketId: string, body: unknown, cookie?: string) {
+  return fetch(`${baseUrl}/api/tickets/${ticketId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+    body: JSON.stringify(body),
+  });
+}
+
+async function middleTicket() {
+  return prisma.ticket.findFirstOrThrow({ where: { subject: `Middle [${run}]` } });
+}
+
+test("PATCH /api/tickets/:id without a session returns 401", async () => {
+  const ticket = await middleTicket();
+  expect((await patchTicket(ticket.id, { assignedToId: null })).status).toBe(401);
+});
+
+test("PATCH /api/tickets/:id lets an agent assign and unassign a ticket", async () => {
+  const cookie = await signIn(agent.email);
+  const ticket = await middleTicket();
+
+  const assigned = await patchTicket(ticket.id, { assignedToId: userIds.admin }, cookie);
+  expect(assigned.status).toBe(200);
+  expect(((await assigned.json()) as { ticket: unknown }).ticket).toMatchObject({
+    id: ticket.id,
+    body: "Body",
+    assignedTo: { id: userIds.admin, name: admin.name },
+  });
+  const detail = await fetch(`${baseUrl}/api/tickets/${ticket.id}`, { headers: { Cookie: cookie } });
+  expect(((await detail.json()) as { ticket: unknown }).ticket).toMatchObject({
+    assignedTo: { id: userIds.admin, name: admin.name },
+  });
+
+  const unassigned = await patchTicket(ticket.id, { assignedToId: null }, cookie);
+  expect(unassigned.status).toBe(200);
+  expect(((await unassigned.json()) as { ticket: unknown }).ticket).toMatchObject({
+    assignedTo: null,
+  });
+  expect((await middleTicket()).assignedToId).toBeNull();
+});
+
+test("PATCH /api/tickets/:id rejects a banned, deleted or unknown assignee", async () => {
+  const cookie = await signIn(agent.email);
+  const ticket = await middleTicket();
+  for (const assignedToId of [userIds.banned, userIds.deleted, "no-such-user"]) {
+    const res = await patchTicket(ticket.id, { assignedToId }, cookie);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Assignee must be an active user" });
+  }
+  expect((await middleTicket()).assignedToId).toBeNull();
+});
+
+test("PATCH /api/tickets/:id rejects an invalid body", async () => {
+  const cookie = await signIn(agent.email);
+  const ticket = await middleTicket();
+  for (const body of [{}, { assignedToId: 42 }, { assignedToId: "" }]) {
+    const res = await patchTicket(ticket.id, body, cookie);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: expect.any(String) });
+  }
+});
+
+test("PATCH /api/tickets/:id returns 404 for an unknown ticket", async () => {
+  const res = await patchTicket(
+    "no-such-ticket",
+    { assignedToId: userIds.agent },
+    await signIn(agent.email),
+  );
+  expect(res.status).toBe(404);
+  expect(await res.json()).toEqual({ error: "Ticket not found" });
+});
+
+test("PATCH /api/tickets/:id lets an admin assign, and changes nothing but the assignee", async () => {
+  const cookie = await signIn(admin.email);
+  const before = await prisma.ticket.findFirstOrThrow({ where: { subject: `Newest [${run}]` } });
+
+  // Fields other than `assignedToId` are ignored.
+  const res = await patchTicket(
+    before.id,
+    { assignedToId: userIds.agent, status: TicketStatus.closed, subject: "Changed" },
+    cookie,
+  );
+  expect(res.status).toBe(200);
+
+  const after = await prisma.ticket.findUniqueOrThrow({ where: { id: before.id } });
+  expect(after).toEqual({ ...before, assignedToId: userIds.agent, updatedAt: after.updatedAt });
+
+  await patchTicket(before.id, { assignedToId: null }, cookie);
 });

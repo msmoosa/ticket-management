@@ -33,6 +33,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await prisma.ticket.deleteMany({ where: { subject: { contains: id } } });
   await prisma.user.deleteMany({
     where: {
       email: {
@@ -280,8 +281,18 @@ describe("after an admin deletes an agent", () => {
   let adminCookie: string;
   let doomedCookie: string;
 
+  let ticketId: string;
+
   beforeAll(async () => {
     doomedId = await createUserId(doomedAgent);
+    ({ id: ticketId } = await prisma.ticket.create({
+      data: {
+        subject: `Assigned [${id}]`,
+        body: "Body",
+        fromEmail: "student@example.com",
+        assignedToId: doomedId,
+      },
+    }));
     doomedCookie = await signIn(doomedAgent.email);
     adminCookie = await signIn(admin.email);
     const res = await deleteUser(doomedId, adminCookie);
@@ -316,6 +327,11 @@ describe("after an admin deletes an agent", () => {
   test("deleting or editing them again returns 404", async () => {
     expect((await deleteUser(doomedId, adminCookie)).status).toBe(404);
     expect((await patchUser(doomedId, doomedAgent, adminCookie)).status).toBe(404);
+  });
+
+  test("their tickets go back to unassigned", async () => {
+    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(ticket.assignedToId).toBeNull();
   });
 
   test("their email stays reserved", async () => {

@@ -121,7 +121,8 @@ usersRouter.patch<{ id: string }>("/:id", requireAdmin, async (req, res) => {
 });
 
 // Soft delete: the row stays (with its email reserved) but the user disappears from the list,
-// is signed out everywhere, and can't sign in again (see the session hook in auth.ts).
+// is signed out everywhere, can't sign in again (see the session hook in auth.ts), and their
+// tickets go back to unassigned.
 // Any admin may delete any user, including another admin or themselves.
 usersRouter.delete<{ id: string }>("/:id", requireAdmin, async (req, res) => {
   const { id } = req.params;
@@ -130,6 +131,7 @@ usersRouter.delete<{ id: string }>("/:id", requireAdmin, async (req, res) => {
   await prisma.$transaction([
     prisma.user.update({ where: { id }, data: { deletedAt: new Date() } }),
     prisma.session.deleteMany({ where: { userId: id } }),
+    prisma.ticket.updateMany({ where: { assignedToId: id }, data: { assignedToId: null } }),
   ]);
   res.status(204).end();
 });

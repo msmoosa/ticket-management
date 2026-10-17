@@ -101,22 +101,72 @@ ticketsRouter.get("/", requireAuth, async (req, res) => {
   res.json({ tickets, total, page, pageSize });
 });
 
+// People a ticket can be assigned to: every active user (agents and admins both work tickets).
+const activeUserWhere: Prisma.UserWhereInput = { deletedAt: null, banned: { not: true } };
+
+// Declared before `/:id` so "assignees" isn't read as a ticket id.
+ticketsRouter.get("/assignees", requireAuth, async (_req, res) => {
+  const users = await prisma.user.findMany({
+    where: activeUserWhere,
+    select: { id: true, name: true, email: true },
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+  });
+  res.json({ users });
+});
+
+const ticketDetailSelect = {
+  id: true,
+  subject: true,
+  body: true,
+  fromEmail: true,
+  fromName: true,
+  status: true,
+  category: true,
+  assignedTo: { select: { id: true, name: true } },
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.TicketSelect;
+
 // One ticket with its full body, for the detail page. Any signed-in user.
 ticketsRouter.get<{ id: string }>("/:id", requireAuth, async (req, res) => {
   const ticket = await prisma.ticket.findUnique({
     where: { id: req.params.id },
-    select: {
-      id: true,
-      subject: true,
-      body: true,
-      fromEmail: true,
-      fromName: true,
-      status: true,
-      category: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    select: ticketDetailSelect,
   });
   if (!ticket) throw new HttpError(404, "Ticket not found");
+  res.json({ ticket });
+});
+
+const updateTicketSchema = z.object({
+  // A user id from GET /api/tickets/assignees, or null to unassign.
+  assignedToId: z.string().min(1).nullable(),
+});
+
+// Any signed-in user can assign a ticket to any active user, or unassign it.
+ticketsRouter.patch<{ id: string }>("/:id", requireAuth, async (req, res) => {
+  const parsed = updateTicketSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid request body");
+  }
+  const { assignedToId } = parsed.data;
+
+  if (assignedToId !== null) {
+    const assignee = await prisma.user.findFirst({
+      where: { id: assignedToId, ...activeUserWhere },
+      select: { id: true },
+    });
+    if (!assignee) throw new HttpError(400, "Assignee must be an active user");
+  }
+
+  const { count } = await prisma.ticket.updateMany({
+    where: { id: req.params.id },
+    data: { assignedToId },
+  });
+  if (count === 0) throw new HttpError(404, "Ticket not found");
+
+  const ticket = await prisma.ticket.findUniqueOrThrow({
+    where: { id: req.params.id },
+    select: ticketDetailSelect,
+  });
   res.json({ ticket });
 });

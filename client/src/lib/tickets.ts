@@ -14,11 +14,19 @@ export type TicketSummary = {
   createdAt: string;
 };
 
-// A ticket as returned by GET /api/tickets/:id: the summary plus its plain-text body.
+// A user a ticket can be assigned to, as returned by GET /api/tickets/assignees.
+export type Assignee = { id: string; name: string; email: string };
+
+// A ticket as returned by GET /api/tickets/:id (and PATCH): the summary plus its plain-text body.
 export type Ticket = TicketSummary & {
   body: string;
+  /** Null while unassigned. */
+  assignedTo: { id: string; name: string } | null;
   updatedAt: string;
 };
+
+// Body of PATCH /api/tickets/:id; `assignedToId: null` unassigns.
+export type TicketUpdate = { assignedToId: string | null };
 
 export const ticketStatusLabel: Record<TicketStatus, string> = {
   open: "Open",
