@@ -137,20 +137,28 @@ ticketsRouter.get<{ id: string }>("/:id", requireAuth, async (req, res) => {
   res.json({ ticket });
 });
 
-const updateTicketSchema = z.object({
-  // A user id from GET /api/tickets/assignees, or null to unassign.
-  assignedToId: z.string().min(1).nullable(),
-});
+const updateTicketSchema = z
+  .object({
+    // A user id from GET /api/tickets/assignees, or null to unassign.
+    assignedToId: z.string().min(1).nullable().optional(),
+    status: z.enum(TicketStatus).optional(),
+    // Null puts the ticket back to uncategorized.
+    category: z.enum(TicketCategory).nullable().optional(),
+  })
+  .refine((body) => Object.values(body).some((value) => value !== undefined), {
+    message: "Nothing to update",
+  });
 
-// Any signed-in user can assign a ticket to any active user, or unassign it.
+// Any signed-in user can change a ticket's status, category or assignee (any active user, or
+// unassigned). Fields left out are kept.
 ticketsRouter.patch<{ id: string }>("/:id", requireAuth, async (req, res) => {
   const parsed = updateTicketSchema.safeParse(req.body);
   if (!parsed.success) {
     throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid request body");
   }
-  const { assignedToId } = parsed.data;
+  const { assignedToId, status, category } = parsed.data;
 
-  if (assignedToId !== null) {
+  if (assignedToId) {
     const assignee = await prisma.user.findFirst({
       where: { id: assignedToId, ...activeUserWhere },
       select: { id: true },
@@ -160,7 +168,7 @@ ticketsRouter.patch<{ id: string }>("/:id", requireAuth, async (req, res) => {
 
   const { count } = await prisma.ticket.updateMany({
     where: { id: req.params.id },
-    data: { assignedToId },
+    data: { assignedToId, status, category },
   });
   if (count === 0) throw new HttpError(404, "Ticket not found");
 

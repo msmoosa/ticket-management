@@ -1,9 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, test } from "vitest";
 import type { Assignee, Ticket } from "@/lib/tickets";
+import { renderWithQuery } from "@/test/render.tsx";
 import { server } from "@/test/server.ts";
 import TicketAssignee from "./TicketAssignee.tsx";
 
@@ -46,15 +46,9 @@ function recordPatches() {
   return bodies;
 }
 
-// Renders with a QueryClient the test can inspect (the component writes saves into its cache).
+// Returns the QueryClient, since saves are written into its cache.
 function renderAssignee(props: { ticket: Ticket } = { ticket }) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <TicketAssignee {...props} />
-    </QueryClientProvider>,
-  );
-  return queryClient;
+  return renderWithQuery(<TicketAssignee {...props} />).queryClient;
 }
 
 const select = () => screen.getByRole("combobox", { name: "Assigned to" });

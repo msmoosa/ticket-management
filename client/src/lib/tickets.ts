@@ -25,8 +25,13 @@ export type Ticket = TicketSummary & {
   updatedAt: string;
 };
 
-// Body of PATCH /api/tickets/:id; `assignedToId: null` unassigns.
-export type TicketUpdate = { assignedToId: string | null };
+// Body of PATCH /api/tickets/:id: any of these (fields left out are kept).
+// `assignedToId: null` unassigns; `category: null` makes the ticket uncategorized.
+export type TicketUpdate = {
+  assignedToId?: string | null;
+  status?: TicketStatus;
+  category?: TicketCategory | null;
+};
 
 export const ticketStatusLabel: Record<TicketStatus, string> = {
   open: "Open",

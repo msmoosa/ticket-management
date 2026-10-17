@@ -398,7 +398,16 @@ test("PATCH /api/tickets/:id rejects a banned, deleted or unknown assignee", asy
 test("PATCH /api/tickets/:id rejects an invalid body", async () => {
   const cookie = await signIn(agent.email);
   const ticket = await middleTicket();
-  for (const body of [{}, { assignedToId: 42 }, { assignedToId: "" }]) {
+  for (const body of [
+    {},
+    { subject: "Only unknown fields" },
+    { assignedToId: 42 },
+    { assignedToId: "" },
+    { status: "pending" },
+    { status: null },
+    { category: "billing" },
+    { category: "uncategorized" },
+  ]) {
     const res = await patchTicket(ticket.id, body, cookie);
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: expect.any(String) });
@@ -415,14 +424,14 @@ test("PATCH /api/tickets/:id returns 404 for an unknown ticket", async () => {
   expect(await res.json()).toEqual({ error: "Ticket not found" });
 });
 
-test("PATCH /api/tickets/:id lets an admin assign, and changes nothing but the assignee", async () => {
+test("PATCH /api/tickets/:id lets an admin assign, changing nothing but the assignee", async () => {
   const cookie = await signIn(admin.email);
   const before = await prisma.ticket.findFirstOrThrow({ where: { subject: `Newest [${run}]` } });
 
-  // Fields other than `assignedToId` are ignored.
+  // Fields that can't be updated are ignored.
   const res = await patchTicket(
     before.id,
-    { assignedToId: userIds.agent, status: TicketStatus.closed, subject: "Changed" },
+    { assignedToId: userIds.agent, subject: "Changed", body: "Changed" },
     cookie,
   );
   expect(res.status).toBe(200);
@@ -431,4 +440,80 @@ test("PATCH /api/tickets/:id lets an admin assign, and changes nothing but the a
   expect(after).toEqual({ ...before, assignedToId: userIds.agent, updatedAt: after.updatedAt });
 
   await patchTicket(before.id, { assignedToId: null }, cookie);
+});
+
+test("PATCH /api/tickets/:id changes the status, keeping the other fields", async () => {
+  const cookie = await signIn(agent.email);
+  const before = await middleTicket();
+
+  const res = await patchTicket(before.id, { status: TicketStatus.resolved }, cookie);
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as { ticket: unknown }).ticket).toMatchObject({
+    status: TicketStatus.resolved,
+    category: before.category,
+    assignedTo: null,
+  });
+  const after = await middleTicket();
+  expect(after).toEqual({ ...before, status: TicketStatus.resolved, updatedAt: after.updatedAt });
+
+  await patchTicket(before.id, { status: before.status }, cookie);
+});
+
+test("PATCH /api/tickets/:id changes the category, and null makes it uncategorized", async () => {
+  const cookie = await signIn(agent.email);
+  const before = await middleTicket();
+  expect(before.category).toBe(TicketCategory.general_question);
+
+  const refund = await patchTicket(before.id, { category: TicketCategory.refund_request }, cookie);
+  expect(refund.status).toBe(200);
+  expect(((await refund.json()) as { ticket: unknown }).ticket).toMatchObject({
+    category: TicketCategory.refund_request,
+    status: before.status,
+  });
+
+  const cleared = await patchTicket(before.id, { category: null }, cookie);
+  expect(((await cleared.json()) as { ticket: unknown }).ticket).toMatchObject({ category: null });
+  expect((await middleTicket()).category).toBeNull();
+
+  await patchTicket(before.id, { category: before.category }, cookie);
+});
+
+test("PATCH /api/tickets/:id changes several fields at once", async () => {
+  const cookie = await signIn(admin.email);
+  const before = await middleTicket();
+
+  const res = await patchTicket(
+    before.id,
+    {
+      status: TicketStatus.closed,
+      category: TicketCategory.technical_question,
+      assignedToId: userIds.agent,
+    },
+    cookie,
+  );
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as { ticket: unknown }).ticket).toMatchObject({
+    status: TicketStatus.closed,
+    category: TicketCategory.technical_question,
+    assignedTo: { id: userIds.agent, name: agent.name },
+  });
+
+  await patchTicket(
+    before.id,
+    { status: before.status, category: before.category, assignedToId: null },
+    cookie,
+  );
+});
+
+test("PATCH /api/tickets/:id changes nothing when the assignee is invalid", async () => {
+  const cookie = await signIn(agent.email);
+  const before = await middleTicket();
+
+  const res = await patchTicket(
+    before.id,
+    { status: TicketStatus.closed, assignedToId: userIds.deleted },
+    cookie,
+  );
+  expect(res.status).toBe(400);
+  expect(await middleTicket()).toEqual(before);
 });

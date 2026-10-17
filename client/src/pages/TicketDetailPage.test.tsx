@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -186,5 +186,43 @@ describe("TicketDetailPage", () => {
       expect(await screen.findByText("Server error")).toBeInTheDocument();
       expect(assigneeSelect()).toBeDisabled();
     });
+  });
+
+  test("shows the new status and category after they are saved", async () => {
+    const user = userEvent.setup();
+    mockTicket({ ticket });
+    // Applies each save to the stored ticket, as the server does.
+    let saved = ticket;
+    server.use(
+      http.patch("/api/tickets/t1", async ({ request }) => {
+        saved = { ...saved, ...((await request.json()) as Partial<Ticket>) };
+        return HttpResponse.json({ ticket: saved });
+      }),
+    );
+    renderPage();
+    const status = await screen.findByRole("combobox", { name: "Status" });
+
+    await user.click(status);
+    await user.click(await screen.findByRole("option", { name: "Closed" }));
+    await waitFor(() => expect(status).toHaveTextContent("Closed"));
+
+    const category = screen.getByRole("combobox", { name: "Category" });
+    await waitFor(() => expect(category).toBeEnabled());
+    await user.click(category);
+    await user.click(await screen.findByRole("option", { name: "Uncategorized" }));
+    await waitFor(() => expect(category).toHaveTextContent("Uncategorized"));
+    expect(status).toHaveTextContent("Closed");
+  });
+
+  test("groups the editable fields in a side panel, apart from the message", async () => {
+    mockTicket({ ticket });
+    renderPage();
+    const panel = within(await screen.findByRole("complementary", { name: "Ticket properties" }));
+
+    for (const name of ["Status", "Category", "Assigned to"]) {
+      expect(panel.getByRole("combobox", { name })).toBeInTheDocument();
+    }
+    expect(panel.queryByText(/The lesson 3 video shows a black screen/)).not.toBeInTheDocument();
+    expect(panel.queryByText("Sam Student")).not.toBeInTheDocument();
   });
 });

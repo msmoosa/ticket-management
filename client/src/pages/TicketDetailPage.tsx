@@ -2,17 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router";
 import TicketAssignee from "@/components/TicketAssignee";
+import TicketCategorySelect from "@/components/TicketCategorySelect";
+import TicketStatusSelect from "@/components/TicketStatusSelect";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, apiErrorMessage } from "@/lib/api";
-import {
-  ticketCategoryLabel,
-  ticketStatusLabel,
-  ticketStatusVariant,
-  type Ticket,
-} from "@/lib/tickets";
+import type { Ticket } from "@/lib/tickets";
 
 const receivedFormat = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -62,53 +58,65 @@ export default function TicketDetailPage() {
       ) : !ticket ? (
         <TicketDetailSkeleton />
       ) : (
-        <>
-          <div className="space-y-3">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
+          <div className="space-y-6">
             <h1 className="text-2xl font-bold break-words">{ticket.subject}</h1>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Badge variant={ticketStatusVariant[ticket.status]}>
-                {ticketStatusLabel[ticket.status]}
-              </Badge>
-              {ticket.category ? (
-                <Badge variant="outline">{ticketCategoryLabel[ticket.category]}</Badge>
-              ) : (
-                <span className="text-muted-foreground">Uncategorized</span>
-              )}
-            </div>
+
+            <dl className="grid gap-4 text-sm sm:grid-cols-2">
+              <div className="space-y-1">
+                <dt className="text-muted-foreground">From</dt>
+                <dd>
+                  {ticket.fromName ? (
+                    <>
+                      {ticket.fromName}{" "}
+                      <span className="text-muted-foreground">&lt;{ticket.fromEmail}&gt;</span>
+                    </>
+                  ) : (
+                    ticket.fromEmail
+                  )}
+                </dd>
+              </div>
+              <div className="space-y-1">
+                <dt className="text-muted-foreground">Received</dt>
+                <dd>{receivedFormat.format(new Date(ticket.createdAt))}</dd>
+              </div>
+            </dl>
+
+            <Card>
+              <CardContent>
+                <p className="text-sm break-words whitespace-pre-wrap">{ticket.body}</p>
+              </CardContent>
+            </Card>
           </div>
 
-          <dl className="grid gap-4 text-sm sm:grid-cols-2">
-            <div className="space-y-1">
-              <dt className="text-muted-foreground">From</dt>
-              <dd>
-                {ticket.fromName ? (
-                  <>
-                    {ticket.fromName}{" "}
-                    <span className="text-muted-foreground">&lt;{ticket.fromEmail}&gt;</span>
-                  </>
-                ) : (
-                  ticket.fromEmail
-                )}
-              </dd>
-            </div>
-            <div className="space-y-1">
-              <dt className="text-muted-foreground">Received</dt>
-              <dd>{receivedFormat.format(new Date(ticket.createdAt))}</dd>
-            </div>
-            <div className="space-y-1">
-              <dt className="text-muted-foreground">Assigned to</dt>
-              <dd>
-                <TicketAssignee ticket={ticket} />
-              </dd>
-            </div>
-          </dl>
-
-          <Card>
-            <CardContent>
-              <p className="text-sm break-words whitespace-pre-wrap">{ticket.body}</p>
-            </CardContent>
-          </Card>
-        </>
+          {/* Editable fields, in a side column on wide screens and below the message otherwise. */}
+          <aside aria-label="Ticket properties">
+            <Card>
+              <CardContent>
+                <dl className="space-y-4 text-sm">
+                  <div className="space-y-1.5">
+                    <dt className="text-muted-foreground">Status</dt>
+                    <dd>
+                      <TicketStatusSelect ticket={ticket} />
+                    </dd>
+                  </div>
+                  <div className="space-y-1.5">
+                    <dt className="text-muted-foreground">Category</dt>
+                    <dd>
+                      <TicketCategorySelect ticket={ticket} />
+                    </dd>
+                  </div>
+                  <div className="space-y-1.5">
+                    <dt className="text-muted-foreground">Assigned to</dt>
+                    <dd>
+                      <TicketAssignee ticket={ticket} />
+                    </dd>
+                  </div>
+                </dl>
+              </CardContent>
+            </Card>
+          </aside>
+        </div>
       )}
     </div>
   );

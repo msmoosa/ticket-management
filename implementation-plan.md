@@ -29,7 +29,7 @@
 - [ ] Implement create ticket API endpoint
 - [x] Implement list tickets API endpoint (with filtering by status and category, sorting, pagination)
 - [x] Implement get ticket API endpoint
-- [ ] Implement update ticket API endpoint (change status, assign agent) — assigning done; status change pending
+- [x] Implement update ticket API endpoint (change status, assign agent)
 - [x] Create ticket list page with filtering, sorting and pagination
 - [x] Create ticket detail page
 
