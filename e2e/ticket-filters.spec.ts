@@ -224,14 +224,18 @@ test.describe("ticket list filters", () => {
       search: `Charlie [${tag}`,
     });
     await expect(rows).toHaveText([/^Charlie/]);
-    await searchBox(page).fill("");
-    await expectTicketsUrl(page, { status: "open", category: "general_question" });
+    // From here on, search for the whole tag: the list is paginated, so sorting the unsearched
+    // list could push this test's tickets off page 1 when the DB holds other tickets.
+    await searchBox(page).fill(tag);
+    await expectTicketsUrl(page, { status: "open", category: "general_question", search: tag });
+    await expect(rows).toHaveText([/^Alpha/, /^Charlie/]);
 
     // Sorting keeps the filters.
     await columnHeader(page, "Subject").getByRole("button", { name: "Subject" }).click();
     await expectTicketsUrl(page, {
       status: "open",
       category: "general_question",
+      search: tag,
       sortBy: "subject",
       sortOrder: "asc",
     });
@@ -244,19 +248,11 @@ test.describe("ticket list filters", () => {
     await choose(statusSelect(page), page, "All statuses");
     await expectTicketsUrl(page, {
       category: "general_question",
-      sortBy: "subject",
-      sortOrder: "asc",
-    });
-    await expect(columnHeader(page, "Subject")).toHaveAttribute("aria-sort", "ascending");
-    await expect(rows).toHaveText([/^Alpha/, /^Bravo/, /^Charlie/]);
-
-    await searchBox(page).fill(tag);
-    await expectTicketsUrl(page, {
-      category: "general_question",
       search: tag,
       sortBy: "subject",
       sortOrder: "asc",
     });
+    await expect(columnHeader(page, "Subject")).toHaveAttribute("aria-sort", "ascending");
     await expect(rows).toHaveText([/^Alpha/, /^Bravo/, /^Charlie/]);
   });
 

@@ -14,10 +14,23 @@ export type TicketSummary = {
   createdAt: string;
 };
 
+// A ticket as returned by GET /api/tickets/:id: the summary plus its plain-text body.
+export type Ticket = TicketSummary & {
+  body: string;
+  updatedAt: string;
+};
+
 export const ticketStatusLabel: Record<TicketStatus, string> = {
   open: "Open",
   resolved: "Resolved",
   closed: "Closed",
+};
+
+// Badge variant for each status, shared by the list and detail pages.
+export const ticketStatusVariant: Record<TicketStatus, "default" | "secondary" | "outline"> = {
+  open: "default",
+  resolved: "secondary",
+  closed: "outline",
 };
 
 export const ticketCategoryLabel: Record<TicketCategory, string> = {

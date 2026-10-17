@@ -100,3 +100,23 @@ ticketsRouter.get("/", requireAuth, async (req, res) => {
   ]);
   res.json({ tickets, total, page, pageSize });
 });
+
+// One ticket with its full body, for the detail page. Any signed-in user.
+ticketsRouter.get<{ id: string }>("/:id", requireAuth, async (req, res) => {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: req.params.id },
+    select: {
+      id: true,
+      subject: true,
+      body: true,
+      fromEmail: true,
+      fromName: true,
+      status: true,
+      category: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+  if (!ticket) throw new HttpError(404, "Ticket not found");
+  res.json({ ticket });
+});

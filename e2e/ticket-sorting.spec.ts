@@ -2,8 +2,9 @@ import type { Page, Request } from "@playwright/test";
 import { expect, test, ticketsHeading, type Ticket, type TicketCategory } from "./fixtures.ts";
 
 // Sorting is done by the server (GET /api/tickets?sortBy=…&sortOrder=…); the page only tracks
-// which heading is active. Other tests' tickets may share the DB, so every assertion on row
-// order is scoped to the rows carrying this test's unique tag.
+// which heading is active. Other tests' tickets may share the DB and the list is paginated, so
+// each test opens the list searched to its own unique tag (keeping its tickets on page 1 in any
+// sort order) and every assertion on row order is scoped to the rows carrying that tag.
 
 const columnHeader = (page: Page, name: string) =>
   page.getByRole("columnheader", { name, exact: true });
@@ -37,8 +38,9 @@ function waitForTicketsRequest(page: Page, sortBy: string, sortOrder: "asc" | "d
   });
 }
 
-async function openTickets(page: Page) {
-  await page.goto("/tickets");
+/** Open the ticket list searched to `tag`, so only this test's tickets are listed. */
+async function openTickets(page: Page, tag: string) {
+  await page.goto(`/tickets?search=${encodeURIComponent(tag)}`);
   await expect(ticketsHeading(page)).toBeVisible();
 }
 
@@ -75,7 +77,7 @@ test.describe("ticket list sorting", () => {
     const tag = await createSubjectTickets(createTicket);
 
     const request = waitForTicketsRequest(page, "createdAt", "desc");
-    await openTickets(page);
+    await openTickets(page, tag);
     await request;
 
     await expectSorted(page, "Received", "descending");
@@ -87,7 +89,7 @@ test.describe("ticket list sorting", () => {
     createTicket,
   }) => {
     const tag = await createSubjectTickets(createTicket);
-    await openTickets(page);
+    await openTickets(page, tag);
     await expect(taggedRows(page, tag)).toHaveText([/^Alpha/, /^Charlie/, /^Bravo/]);
 
     await clickSort(page, "Subject", "subject", "asc");
@@ -109,7 +111,7 @@ test.describe("ticket list sorting", () => {
     createTicket,
   }) => {
     const tag = await createSubjectTickets(createTicket);
-    await openTickets(page);
+    await openTickets(page, tag);
 
     await clickSort(page, "Subject", "subject", "asc");
     await expectSorted(page, "Subject", "ascending");
@@ -145,7 +147,7 @@ test.describe("ticket list sorting", () => {
       if (category) setTicketCategory(ticket.id, category);
     }
 
-    await openTickets(page);
+    await openTickets(page, tag);
     const rows = taggedRows(page, tag);
     await expect(rows).toHaveCount(specs.length);
 
@@ -170,8 +172,7 @@ test.describe("ticket list sorting", () => {
       /^Uncategorized older/,
     ]);
 
-    // Across the whole list (including any other tickets), no categorized row follows an
-    // uncategorized one.
+    // Across the whole page, no categorized row follows an uncategorized one.
     const categoryCells = await page
       .getByRole("row")
       .filter({ has: page.getByRole("cell") })

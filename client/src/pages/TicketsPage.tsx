@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useLocation, useSearchParams } from "react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   createColumnHelper,
@@ -32,10 +32,10 @@ import {
   ticketPageSizes,
   ticketStatuses,
   ticketStatusLabel,
+  ticketStatusVariant,
   type TicketCategoryFilter,
   type TicketListParams,
   type TicketListResponse,
-  type TicketStatus,
   type TicketSummary,
 } from "@/lib/tickets";
 
@@ -43,12 +43,6 @@ const receivedFormat = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
   timeStyle: "short",
 });
-
-const statusVariant: Record<TicketStatus, "default" | "secondary" | "outline"> = {
-  open: "default",
-  resolved: "secondary",
-  closed: "outline",
-};
 
 const SKELETON_ROWS = 5;
 
@@ -78,6 +72,21 @@ function TicketRowSkeleton() {
   );
 }
 
+// Links to the ticket, passing the list's URL along so the detail page can go back to the same
+// sort, filters and page.
+function SubjectLink({ ticket }: { ticket: TicketSummary }) {
+  const location = useLocation();
+  return (
+    <Link
+      to={`/tickets/${ticket.id}`}
+      state={{ from: `${location.pathname}${location.search}` }}
+      className="block max-w-md truncate font-medium hover:underline"
+    >
+      {ticket.subject}
+    </Link>
+  );
+}
+
 // Sorting happens on the server, so the table only tracks sorting state (no sorted row model).
 const features = tableFeatures({ rowSortingFeature });
 const column = createColumnHelper<typeof features, TicketSummary>();
@@ -86,7 +95,7 @@ const column = createColumnHelper<typeof features, TicketSummary>();
 const columns = column.columns([
   column.accessor("subject", {
     header: "Subject",
-    cell: (info) => <span className="block max-w-md truncate font-medium">{info.getValue()}</span>,
+    cell: ({ row: { original: ticket } }) => <SubjectLink ticket={ticket} />,
   }),
   column.accessor("fromEmail", {
     header: "From",
@@ -114,7 +123,7 @@ const columns = column.columns([
   column.accessor("status", {
     header: "Status",
     cell: (info) => (
-      <Badge variant={statusVariant[info.getValue()]}>{ticketStatusLabel[info.getValue()]}</Badge>
+      <Badge variant={ticketStatusVariant[info.getValue()]}>{ticketStatusLabel[info.getValue()]}</Badge>
     ),
   }),
   column.accessor("createdAt", {

@@ -277,3 +277,36 @@ test("GET /api/tickets rejects an invalid page or page size", async () => {
     expect(await res.json()).toEqual({ error: expect.any(String) });
   }
 });
+
+test("GET /api/tickets/:id without a session returns 401", async () => {
+  const res = await fetch(`${baseUrl}/api/tickets/anything`);
+  expect(res.status).toBe(401);
+});
+
+test("GET /api/tickets/:id returns the ticket with its body", async () => {
+  const cookie = await signIn(agent.email);
+  const stored = await prisma.ticket.findFirstOrThrow({ where: { subject: `Oldest [${run}]` } });
+  const res = await fetch(`${baseUrl}/api/tickets/${stored.id}`, { headers: { Cookie: cookie } });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    ticket: {
+      id: stored.id,
+      subject: `Oldest [${run}]`,
+      body: "Body",
+      fromEmail: `olive-${run}@example.com`,
+      fromName: `Olive Older-${run}`,
+      status: TicketStatus.closed,
+      category: null,
+      createdAt: "2026-05-01T10:00:00.000Z",
+      updatedAt: stored.updatedAt.toISOString(),
+    },
+  });
+});
+
+test("GET /api/tickets/:id returns 404 for an unknown ticket", async () => {
+  const res = await fetch(`${baseUrl}/api/tickets/no-such-ticket`, {
+    headers: { Cookie: await signIn(admin.email) },
+  });
+  expect(res.status).toBe(404);
+  expect(await res.json()).toEqual({ error: "Ticket not found" });
+});

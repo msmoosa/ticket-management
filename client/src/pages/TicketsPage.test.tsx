@@ -116,6 +116,16 @@ describe("TicketsPage", () => {
     ]);
   });
 
+  test("links each subject to its ticket", async () => {
+    mockTickets(listResponse(tickets));
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: "Course video won't play" })).toHaveAttribute(
+      "href",
+      "/tickets/t2",
+    );
+  });
+
   test("shows sender, status and received time for each ticket", async () => {
     mockTickets(listResponse(tickets));
     renderPage();
