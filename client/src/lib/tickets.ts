@@ -55,7 +55,7 @@ export type TicketCategoryFilter = TicketCategory | "uncategorized";
 
 // Query params accepted by GET /api/tickets.
 export type TicketListParams = {
-  sortBy: "subject" | "fromEmail" | "category" | "status" | "createdAt";
+  sortBy: "waiting" | "subject" | "fromEmail" | "category" | "status" | "createdAt";
   sortOrder: "asc" | "desc";
   status?: TicketStatus;
   category?: TicketCategoryFilter;
