@@ -25,3 +25,32 @@ export const ticketCategoryLabel: Record<TicketCategory, string> = {
   technical_question: "Technical",
   refund_request: "Refund",
 };
+
+export const ticketStatuses = Object.keys(ticketStatusLabel) as TicketStatus[];
+export const ticketCategories = Object.keys(ticketCategoryLabel) as TicketCategory[];
+
+/** Category filter value; `uncategorized` matches tickets with a null category. */
+export type TicketCategoryFilter = TicketCategory | "uncategorized";
+
+// Query params accepted by GET /api/tickets.
+export type TicketListParams = {
+  sortBy: "subject" | "fromEmail" | "category" | "status" | "createdAt";
+  sortOrder: "asc" | "desc";
+  status?: TicketStatus;
+  category?: TicketCategoryFilter;
+  search?: string;
+  /** 1-based. */
+  page: number;
+  pageSize: number;
+};
+
+export const ticketPageSizes = [10, 25, 50, 100] as const;
+export const defaultTicketPageSize = 25;
+
+// Response of GET /api/tickets: one page, plus the number of tickets matching the filters.
+export type TicketListResponse = {
+  tickets: TicketSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+};

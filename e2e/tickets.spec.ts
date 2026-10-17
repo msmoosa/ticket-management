@@ -52,7 +52,9 @@ test.describe("ticket list page", () => {
 
     await page.goto("/tickets");
     await expect(ticketsHeading(page)).toBeVisible();
-    await expect(page.getByText("Support requests from email, newest first.")).toBeVisible();
+    await expect(
+      page.getByText("Support requests from email. Click a column heading to sort."),
+    ).toBeVisible();
     await expect(page.getByRole("columnheader")).toHaveText([
       "Subject",
       "From",

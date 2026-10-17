@@ -27,10 +27,10 @@
 ## Phase 4: Ticket CRUD
 
 - [ ] Implement create ticket API endpoint
-- [ ] Implement list tickets API endpoint (with filtering by status and category, sorting) — list sorted newest first done; filtering pending
+- [x] Implement list tickets API endpoint (with filtering by status and category, sorting, pagination)
 - [ ] Implement get ticket API endpoint
 - [ ] Implement update ticket API endpoint (change status, assign agent)
-- [ ] Create ticket list page with filtering and sorting — list (newest first) done; filtering/sorting controls pending
+- [x] Create ticket list page with filtering, sorting and pagination
 - [ ] Create ticket detail page
 
 ## Phase 5: AI Features

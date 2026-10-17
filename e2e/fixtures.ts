@@ -155,13 +155,17 @@ if (op.kind === "delete") {
 } else if (op.kind === "setCategory") {
   const rows = await sql\`UPDATE "ticket" SET "category" = \${op.category}::"TicketCategory" WHERE "id" = \${op.id} RETURNING "id"\`;
   if (rows.length !== 1) throw new Error("No ticket " + op.id);
+} else if (op.kind === "setStatus") {
+  const rows = await sql\`UPDATE "ticket" SET "status" = \${op.status}::"TicketStatus" WHERE "id" = \${op.id} RETURNING "id"\`;
+  if (rows.length !== 1) throw new Error("No ticket " + op.id);
 }
 await sql.close();
 `;
 
 type TicketDbOp =
   | { kind: "delete"; ids: string[] }
-  | { kind: "setCategory"; id: string; category: TicketCategory | null };
+  | { kind: "setCategory"; id: string; category: TicketCategory | null }
+  | { kind: "setStatus"; id: string; status: TicketStatus };
 
 function runTicketDbOp(databaseUrl: string, op: TicketDbOp) {
   execFileSync("bun", ["-e", TICKET_DB_SCRIPT], {
@@ -190,6 +194,11 @@ type Fixtures = {
    * lands). Only use on tickets this test created.
    */
   setTicketCategory: (id: string, category: TicketCategory | null) => void;
+  /**
+   * Set a ticket's status directly in the test DB (there's no update-ticket API yet). Only use
+   * on tickets this test created.
+   */
+  setTicketStatus: (id: string, status: TicketStatus) => void;
   /** A standalone API context signed in as the seeded admin (separate from `page`'s cookies). */
   adminApi: APIRequestContext;
   /** Create a user (default role: agent) via the admin API; removed again after the test. */
@@ -237,6 +246,10 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     await use((id, category) =>
       runTicketDbOp(serverEnv.DATABASE_URL, { kind: "setCategory", id, category }),
     );
+  },
+
+  setTicketStatus: async ({ serverEnv }, use) => {
+    await use((id, status) => runTicketDbOp(serverEnv.DATABASE_URL, { kind: "setStatus", id, status }));
   },
 
   adminApi: async ({ baseURL }, use) => {
