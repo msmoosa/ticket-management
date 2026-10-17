@@ -9,7 +9,15 @@ import { HttpError } from "../middleware/error-handler.ts";
 export const ticketsRouter = Router();
 
 // Columns the list can be sorted by. Enums (`status`, `category`) sort in declaration order.
-export const ticketSortFields = ["subject", "fromEmail", "category", "status", "createdAt"] as const;
+// `waiting` sorts by how long the sender has waited: `desc` is longest first.
+export const ticketSortFields = [
+  "waiting",
+  "subject",
+  "fromEmail",
+  "category",
+  "status",
+  "createdAt",
+] as const;
 
 export const DEFAULT_PAGE_SIZE = 25;
 export const MAX_PAGE_SIZE = 100;
@@ -75,7 +83,10 @@ ticketsRouter.get("/", requireAuth, async (req, res) => {
     // Uncategorized tickets go last in either direction.
     sortBy === "category"
       ? { category: { sort: sortOrder, nulls: "last" } }
-      : { [sortBy]: sortOrder },
+      : sortBy === "waiting"
+        ? // Longer wait = earlier `awaitingReplySince`; tickets nobody is waiting on go last.
+          { awaitingReplySince: { sort: sortOrder === "desc" ? "asc" : "desc", nulls: "last" } }
+        : { [sortBy]: sortOrder },
   ];
   if (sortBy !== "createdAt") orderBy.push({ createdAt: "desc" });
   orderBy.push({ id: "desc" });

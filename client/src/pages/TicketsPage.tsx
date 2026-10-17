@@ -93,12 +93,13 @@ function SubjectLink({ ticket }: { ticket: TicketSummary }) {
 const features = tableFeatures({ rowSortingFeature });
 const column = createColumnHelper<typeof features, TicketSummary>();
 
-// Column ids double as the server's `sortBy` values (except `waiting`, which can't be sorted yet).
+// Column ids double as the server's `sortBy` values.
 const columns = column.columns([
   column.accessor("awaitingReplySince", {
     id: "waiting",
     header: "Waiting",
-    enableSorting: false,
+    // Descending = longest wait first.
+    sortDescFirst: true,
     // Only open tickets wait; "Replied" means the next move is the sender's.
     cell: ({ row: { original: ticket } }) =>
       ticket.status !== "open" ? null : ticket.awaitingReplySince ? (
@@ -156,6 +157,7 @@ const noTickets: TicketSummary[] = [];
 const ariaSort = { asc: "ascending", desc: "descending" } as const;
 
 const sortFields: TicketListParams["sortBy"][] = [
+  "waiting",
   "subject",
   "fromEmail",
   "category",
