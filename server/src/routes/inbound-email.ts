@@ -143,7 +143,7 @@ export async function createTicketFromEmail(email: InboundEmail) {
   try {
     const threaded = await findThreadedTicket(email);
     if (threaded) {
-      const [reply, ticket] = await prisma.$transaction([
+      const [reply, , ticket] = await prisma.$transaction([
         prisma.ticketReply.create({
           data: {
             ticketId: threaded.id,
@@ -152,6 +152,11 @@ export async function createTicketFromEmail(email: InboundEmail) {
             messageId,
           },
           select: replySelect,
+        }),
+        // Waiting since this message, unless already waiting on an earlier unanswered one.
+        prisma.ticket.updateMany({
+          where: { id: threaded.id, awaitingReplySince: null },
+          data: { awaitingReplySince: new Date() },
         }),
         prisma.ticket.update({
           where: { id: threaded.id },

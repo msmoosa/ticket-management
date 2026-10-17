@@ -115,6 +115,9 @@ model Ticket {
   assignedToId String?
   assignedTo   User?   @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
   replies   TicketReply[]
+  // When the sender started waiting for an answer: their earliest message since the last agent
+  // reply (the ticket's creation, or a customer reply). Null once an agent has replied.
+  awaitingReplySince DateTime? @default(now())
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 

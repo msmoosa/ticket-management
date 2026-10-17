@@ -132,6 +132,8 @@ test("GET /api/tickets returns list fields only (no body)", async () => {
     fromName: "Sam Student",
     status: "open",
     category: "refund_request",
+    // Set when the ticket was stored; replies change it (see the reply tests).
+    awaitingReplySince: expect.any(String),
     createdAt: "2026-05-03T10:00:00.000Z",
   });
 });
@@ -312,6 +314,7 @@ test("GET /api/tickets/:id returns the ticket with its body", async () => {
       status: TicketStatus.closed,
       category: null,
       assignedTo: null,
+      awaitingReplySince: stored.awaitingReplySince?.toISOString() ?? null,
       createdAt: "2026-05-01T10:00:00.000Z",
       updatedAt: stored.updatedAt.toISOString(),
     },
@@ -588,4 +591,22 @@ test("ticket replies return 404 for an unknown ticket", async () => {
   const post = await postReply("no-such-ticket", { body: "Hello" }, cookie);
   expect(post.status).toBe(404);
   expect(await post.json()).toEqual({ error: "Ticket not found" });
+});
+
+test("an agent reply ends the sender's wait", async () => {
+  const cookie = await signIn(agent.email);
+  const ticket = await prisma.ticket.create({
+    data: { subject: `Waiting [${run}]`, body: "Body", fromEmail: "student@example.com" },
+  });
+  expect(ticket.awaitingReplySince).toBeInstanceOf(Date);
+
+  const detail = await fetch(`${baseUrl}/api/tickets/${ticket.id}`, { headers: { Cookie: cookie } });
+  const { ticket: shown } = (await detail.json()) as { ticket: { awaitingReplySince: string } };
+  expect(shown.awaitingReplySince).toBe(ticket.awaitingReplySince!.toISOString());
+  const listed = (await listTickets(cookie, `?search=Waiting [${run}]`))[0];
+  expect(listed?.awaitingReplySince).toBe(ticket.awaitingReplySince!.toISOString());
+
+  expect((await postReply(ticket.id, { body: "On it" }, cookie)).status).toBe(201);
+  const after = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+  expect(after.awaitingReplySince).toBeNull();
 });

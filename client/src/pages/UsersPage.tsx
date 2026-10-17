@@ -37,7 +37,7 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold">Users</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
           <p className="text-sm text-muted-foreground">
             Everyone who can sign in to the help desk.
           </p>
@@ -52,9 +52,9 @@ export default function UsersPage() {
           </AlertDescription>
         </Alert>
       ) : (
-        <div className="rounded-lg border bg-background">
+        <div className="overflow-hidden rounded-lg border bg-card">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-muted/50">
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>

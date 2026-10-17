@@ -163,6 +163,7 @@ const data = samples.map(([category, subject, body], i) => {
       : ageDays < 30
         ? roll < 0.45 ? TicketStatus.open : roll < 0.85 ? TicketStatus.resolved : TicketStatus.closed
         : roll < 0.15 ? TicketStatus.open : roll < 0.6 ? TicketStatus.resolved : TicketStatus.closed;
+  const createdAt = new Date(now - ageDays * DAY);
   return {
     subject,
     body,
@@ -170,7 +171,9 @@ const data = samples.map(([category, subject, body], i) => {
     fromName,
     status,
     category,
-    createdAt: new Date(now - ageDays * DAY),
+    createdAt,
+    // No replies are seeded, so every sender is still waiting since they wrote.
+    awaitingReplySince: createdAt,
     messageId: `<seed-ticket-${String(i + 1).padStart(3, "0")}@example.com>`,
   };
 });

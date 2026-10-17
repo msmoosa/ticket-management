@@ -16,6 +16,7 @@ const ticket: Ticket = {
   status: "open",
   category: "technical_question",
   assignedTo: null,
+  awaitingReplySince: null,
   createdAt: "2026-05-02T09:15:00.000Z",
   updatedAt: "2026-05-02T09:15:00.000Z",
 };

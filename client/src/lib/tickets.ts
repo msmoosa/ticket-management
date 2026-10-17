@@ -11,6 +11,8 @@ export type TicketSummary = {
   status: TicketStatus;
   /** Null until the ticket is classified. */
   category: TicketCategory | null;
+  /** When the sender started waiting for an answer; null once an agent has replied. */
+  awaitingReplySince: string | null;
   createdAt: string;
 };
 
@@ -37,13 +39,6 @@ export const ticketStatusLabel: Record<TicketStatus, string> = {
   open: "Open",
   resolved: "Resolved",
   closed: "Closed",
-};
-
-// Badge variant for each status, shared by the list and detail pages.
-export const ticketStatusVariant: Record<TicketStatus, "default" | "secondary" | "outline"> = {
-  open: "default",
-  resolved: "secondary",
-  closed: "outline",
 };
 
 export const ticketCategoryLabel: Record<TicketCategory, string> = {

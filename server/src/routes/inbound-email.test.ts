@@ -272,3 +272,17 @@ test("mail from someone else, or referencing nothing known, starts a new ticket"
   }
   expect(await prisma.ticketReply.count({ where: { ticketId: ticket.id } })).toBe(0);
 });
+
+test("a customer reply after an agent's answer starts a new wait; another one keeps it", async () => {
+  const { ticket, messageId } = await openTicket("reply-waiting");
+  await prisma.ticket.update({ where: { id: ticket.id }, data: { awaitingReplySince: null } });
+
+  await post(replyEmail({ inReplyTo: messageId, text: "First follow-up" }));
+  const waiting = (await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } }))
+    .awaitingReplySince;
+  expect(waiting).toBeInstanceOf(Date);
+
+  await post(replyEmail({ inReplyTo: messageId, text: "Second follow-up" }));
+  const still = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+  expect(still.awaitingReplySince).toEqual(waiting);
+});

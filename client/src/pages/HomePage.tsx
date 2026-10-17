@@ -10,13 +10,13 @@ export default function HomePage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
       <p className="flex items-center gap-1 text-sm">
         API status:
         {status === "pending" ? (
           <Skeleton role="status" aria-label="Loading" className="h-4 w-8" />
         ) : (
-          <span className={status === "success" ? "text-green-700" : "text-red-700"}>
+          <span className={status === "success" ? "text-primary" : "text-destructive"}>
             {status === "success" ? "ok" : "error"}
           </span>
         )}

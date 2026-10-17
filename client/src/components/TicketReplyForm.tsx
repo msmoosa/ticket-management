@@ -44,7 +44,8 @@ export default function TicketReplyForm({ ticketId }: Props) {
       queryClient.setQueryData<TicketReply[]>(["tickets", "replies", ticketId], (replies) =>
         replies ? [...replies, reply] : replies,
       );
-      void queryClient.invalidateQueries({ queryKey: ["tickets", "replies", ticketId] });
+      // The reply also ends the sender's wait, which the ticket page and the lists show.
+      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
     },
   });
 

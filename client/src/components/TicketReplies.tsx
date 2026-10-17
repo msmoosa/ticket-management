@@ -7,10 +7,24 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api, apiErrorMessage } from "@/lib/api";
 import type { Ticket, TicketReply } from "@/lib/tickets";
 import { cn } from "@/lib/utils";
+import { formatDuration } from "@/lib/waiting";
 
 const sentFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
-type Props = { ticket: Pick<Ticket, "id" | "fromEmail" | "fromName"> };
+type Props = { ticket: Pick<Ticket, "id" | "fromEmail" | "fromName" | "createdAt"> };
+
+const HOUR = 3_600_000;
+
+// "2 days later" between messages an hour or more apart, so response times are visible.
+function Gap({ from, to }: { from: string; to: string }) {
+  const ms = new Date(to).getTime() - new Date(from).getTime();
+  if (ms < HOUR) return null;
+  return (
+    <p className="mb-3 flex items-center gap-3 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+      {formatDuration(ms)} later
+    </p>
+  );
+}
 
 // The ticket's reply thread (oldest first): agents' replies and the sender's emailed replies,
 // followed by the form to add a reply.
@@ -29,7 +43,7 @@ export default function TicketReplies({ ticket }: Props) {
 
   return (
     <section aria-labelledby="ticket-replies-heading" className="space-y-4">
-      <h2 id="ticket-replies-heading" className="text-lg font-semibold">
+      <h2 id="ticket-replies-heading" className="text-lg font-semibold tracking-tight">
         Replies
       </h2>
 
@@ -45,8 +59,9 @@ export default function TicketReplies({ ticket }: Props) {
         <p className="text-sm text-muted-foreground">No replies yet.</p>
       ) : (
         <ol aria-label="Reply thread" className="space-y-3">
-          {replies.map((reply) => (
+          {replies.map((reply, i) => (
             <li key={reply.id}>
+              <Gap from={i === 0 ? ticket.createdAt : replies[i - 1]!.createdAt} to={reply.createdAt} />
               <Card size="sm" className={cn(reply.sender === "customer" && "bg-muted")}>
                 <CardContent className="space-y-2">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 text-sm">

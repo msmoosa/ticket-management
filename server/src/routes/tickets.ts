@@ -90,6 +90,7 @@ ticketsRouter.get("/", requireAuth, async (req, res) => {
         fromName: true,
         status: true,
         category: true,
+        awaitingReplySince: true,
         createdAt: true,
       },
       orderBy,
@@ -123,6 +124,7 @@ const ticketDetailSelect = {
   status: true,
   category: true,
   assignedTo: { select: { id: true, name: true } },
+  awaitingReplySince: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.TicketSelect;
@@ -223,9 +225,13 @@ ticketsRouter.post<{ id: string }>("/:id/replies", requireAuth, async (req, res)
   }
   await assertTicketExists(req.params.id);
 
-  const reply = await prisma.ticketReply.create({
-    data: { ticketId: req.params.id, authorId: res.locals.user.id, body: parsed.data.body },
-    select: replySelect,
-  });
+  const [reply] = await prisma.$transaction([
+    prisma.ticketReply.create({
+      data: { ticketId: req.params.id, authorId: res.locals.user.id, body: parsed.data.body },
+      select: replySelect,
+    }),
+    // The sender has an answer, so they're no longer waiting.
+    prisma.ticket.update({ where: { id: req.params.id }, data: { awaitingReplySince: null } }),
+  ]);
   res.status(201).json({ reply });
 });

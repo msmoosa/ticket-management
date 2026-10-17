@@ -17,6 +17,7 @@ const tickets: TicketSummary[] = [
     fromName: null,
     status: "open",
     category: "refund_request",
+    awaitingReplySince: null,
     createdAt: "2026-05-03T14:30:00.000Z",
   },
   {
@@ -26,6 +27,7 @@ const tickets: TicketSummary[] = [
     fromName: "Sam Student",
     status: "resolved",
     category: "technical_question",
+    awaitingReplySince: null,
     createdAt: "2026-05-02T09:15:00.000Z",
   },
   {
@@ -35,6 +37,7 @@ const tickets: TicketSummary[] = [
     fromName: "Olivia Old",
     status: "closed",
     category: null,
+    awaitingReplySince: null,
     createdAt: "2026-05-01T08:00:00.000Z",
   },
 ];
@@ -90,7 +93,7 @@ describe("TicketsPage", () => {
     const placeholders = within(body).getAllByRole("row");
     expect(placeholders).toHaveLength(5);
     // One placeholder per column, so the layout doesn't jump when data arrives.
-    for (const row of placeholders) expect(within(row).getAllByRole("cell")).toHaveLength(5);
+    for (const row of placeholders) expect(within(row).getAllByRole("cell")).toHaveLength(6);
     expect(screen.queryByText("No tickets yet.")).not.toBeInTheDocument();
 
     await screen.findByText("Refund for double charge");
@@ -103,17 +106,47 @@ describe("TicketsPage", () => {
 
     await screen.findByText("Refund for double charge");
     expect(screen.getAllByRole("columnheader").map((th) => th.textContent)).toEqual([
+      "Waiting",
       "Subject",
       "From",
       "Category",
       "Status",
       "Received",
     ]);
-    expect(bodyRows().map((row) => within(row).getAllByRole("cell")[0]!.textContent)).toEqual([
+    expect(bodyRows().map((row) => within(row).getAllByRole("cell")[1]!.textContent)).toEqual([
       "Refund for double charge",
       "Course video won't play",
       "Old question",
     ]);
+  });
+
+  test("shows how long each open ticket's sender has waited, by urgency", async () => {
+    const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+    const HOUR = 3_600_000;
+    mockTickets(
+      listResponse([
+        { ...tickets[0]!, id: "w1", subject: "Waiting briefly", awaitingReplySince: ago(2 * HOUR) },
+        { ...tickets[0]!, id: "w2", subject: "Waiting a while", awaitingReplySince: ago(5 * HOUR) },
+        { ...tickets[0]!, id: "w3", subject: "Waiting too long", awaitingReplySince: ago(30 * HOUR) },
+        { ...tickets[0]!, id: "w4", subject: "Already answered", awaitingReplySince: null },
+        { ...tickets[1]!, id: "w5", subject: "Resolved one", awaitingReplySince: ago(HOUR) },
+      ]),
+    );
+    renderPage();
+    const waiting = (subject: string) =>
+      within(screen.getByRole("row", { name: new RegExp(subject) })).getAllByRole("cell")[0]!;
+
+    await screen.findByText("Waiting briefly");
+    expect(waiting("Waiting briefly")).toHaveTextContent(/^2h$/);
+    expect(waiting("Waiting a while")).toHaveTextContent(/^5h$/);
+    expect(waiting("Waiting too long")).toHaveTextContent(/^30h$/);
+    expect(waiting("Already answered")).toHaveTextContent(/^Replied$/);
+    // Only open tickets wait.
+    expect(waiting("Resolved one")).toHaveTextContent(/^$/);
+    // The exact start is on hover.
+    expect(within(waiting("Waiting briefly")).getByTitle(/^Waiting since /)).toBeInTheDocument();
+    // Waiting can't be sorted (yet), so its heading isn't a button.
+    expect(screen.queryByRole("button", { name: "Waiting" })).not.toBeInTheDocument();
   });
 
   test("links each subject to its ticket", async () => {
@@ -160,7 +193,7 @@ describe("TicketsPage", () => {
     renderPage();
 
     const category = (subject: RegExp) =>
-      within(screen.getByRole("row", { name: subject })).getAllByRole("cell")[2]!;
+      within(screen.getByRole("row", { name: subject })).getAllByRole("cell")[3]!;
 
     await screen.findByText("Refund for double charge");
     expect(category(/Refund for double charge/)).toHaveTextContent("Refund");
@@ -206,7 +239,7 @@ describe("TicketsPage", () => {
     renderPage();
     await screen.findByText("Refund for double charge");
 
-    const subjects = () => bodyRows().map((row) => within(row).getAllByRole("cell")[0]!.textContent);
+    const subjects = () => bodyRows().map((row) => within(row).getAllByRole("cell")[1]!.textContent);
 
     // Text columns start ascending.
     fireEvent.click(screen.getByRole("button", { name: "Subject" }));

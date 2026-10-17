@@ -24,7 +24,12 @@ const replies: TicketReply[] = [
   },
 ];
 
-const ticket = { id: "t1", fromEmail: "sam@example.com", fromName: "Sam Student" };
+const ticket = {
+  id: "t1",
+  fromEmail: "sam@example.com",
+  fromName: "Sam Student",
+  createdAt: "2026-05-02T09:30:00.000Z",
+};
 
 const sentFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
@@ -91,6 +96,17 @@ describe("TicketReplies", () => {
     renderWithQuery(<TicketReplies ticket={{ ...ticket, fromName: null }} />);
     const item = within(await screen.findByRole("listitem"));
     expect(item.getByText("sam@example.com")).toBeInTheDocument();
+  });
+
+  test("marks the time between messages an hour or more apart", async () => {
+    mockReplies({ replies });
+    renderWithQuery(<TicketReplies ticket={ticket} />);
+    const items = within(await screen.findByRole("list", { name: "Reply thread" })).getAllByRole(
+      "listitem",
+    );
+    // 30 minutes after the email: too close to mark. Then 22.5 hours after the first reply.
+    expect(within(items[0]!).queryByText(/later$/)).not.toBeInTheDocument();
+    expect(within(items[1]!).getByText("22 hours later")).toBeInTheDocument();
   });
 
   test("says when there are no replies yet", async () => {

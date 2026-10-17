@@ -12,6 +12,7 @@ const ticket: Ticket = {
   status: "open",
   category: null,
   assignedTo: null,
+  awaitingReplySince: null,
   createdAt: "2026-05-02T09:15:00.000Z",
   updatedAt: "2026-05-02T10:00:00.000Z",
 };
@@ -29,6 +30,19 @@ describe("TicketDetail", () => {
     }).format(new Date(ticket.createdAt));
     expect(screen.getByText(received)).toBeInTheDocument();
     expect(screen.getByText(/The lesson 3 video shows a black screen/)).toBeInTheDocument();
+  });
+
+  test("shows how long the sender has waited on an open ticket", () => {
+    const since = new Date(Date.now() - 3 * 3_600_000 - 60_000).toISOString();
+    const { rerender } = render(<TicketDetail ticket={{ ...ticket, awaitingReplySince: since }} />);
+    expect(screen.getByText("Waiting")).toBeInTheDocument();
+    expect(screen.getByText("3 hours")).toBeInTheDocument();
+
+    // Not once answered, nor on a resolved ticket.
+    rerender(<TicketDetail ticket={{ ...ticket, awaitingReplySince: null }} />);
+    expect(screen.queryByText("Waiting")).not.toBeInTheDocument();
+    rerender(<TicketDetail ticket={{ ...ticket, status: "resolved", awaitingReplySince: since }} />);
+    expect(screen.queryByText("Waiting")).not.toBeInTheDocument();
   });
 
   test("shows just the email for a sender without a name", () => {

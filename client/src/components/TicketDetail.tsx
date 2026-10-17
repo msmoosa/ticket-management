@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import WaitingTime from "@/components/WaitingTime";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Ticket } from "@/lib/tickets";
 
@@ -16,12 +17,13 @@ type Props = {
 // A ticket's original email: subject, sender, received date and message. Rendered as a fragment,
 // so the header, `children` and message are laid out by the parent (the detail page's grid).
 export default function TicketDetail({ ticket, children }: Props) {
+  const waitingSince = ticket.status === "open" ? ticket.awaitingReplySince : null;
   return (
     <>
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold break-words">{ticket.subject}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight break-words">{ticket.subject}</h1>
 
-        <dl className="grid gap-4 text-sm sm:grid-cols-2">
+        <dl className={`grid gap-4 text-sm ${waitingSince ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           <div className="space-y-1">
             <dt className="text-muted-foreground">From</dt>
             <dd>
@@ -39,6 +41,14 @@ export default function TicketDetail({ ticket, children }: Props) {
             <dt className="text-muted-foreground">Received</dt>
             <dd>{receivedFormat.format(new Date(ticket.createdAt))}</dd>
           </div>
+          {waitingSince && (
+            <div className="space-y-1">
+              <dt className="text-muted-foreground">Waiting</dt>
+              <dd>
+                <WaitingTime since={waitingSince} format="long" />
+              </dd>
+            </div>
+          )}
         </dl>
       </div>
 

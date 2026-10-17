@@ -12,8 +12,9 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import TicketFilters, { type TicketFilterValues } from "@/components/TicketFilters";
 import TicketPagination, { pageCount } from "@/components/TicketPagination";
+import TicketStatusBadge from "@/components/TicketStatusBadge";
+import WaitingTime from "@/components/WaitingTime";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -31,8 +32,6 @@ import {
   ticketCategoryLabel,
   ticketPageSizes,
   ticketStatuses,
-  ticketStatusLabel,
-  ticketStatusVariant,
   type TicketCategoryFilter,
   type TicketListParams,
   type TicketListResponse,
@@ -46,10 +45,13 @@ const receivedFormat = new Intl.DateTimeFormat(undefined, {
 
 const SKELETON_ROWS = 5;
 
-// Placeholder row shaped like a real one: subject, two-line sender, category, status badge, date.
+// Placeholder row shaped like a real one: wait, subject, two-line sender, category, status, date.
 function TicketRowSkeleton() {
   return (
     <TableRow>
+      <TableCell>
+        <Skeleton className="h-4 w-10" />
+      </TableCell>
       <TableCell>
         <Skeleton className="h-4 w-56" />
       </TableCell>
@@ -91,8 +93,20 @@ function SubjectLink({ ticket }: { ticket: TicketSummary }) {
 const features = tableFeatures({ rowSortingFeature });
 const column = createColumnHelper<typeof features, TicketSummary>();
 
-// Column ids double as the server's `sortBy` values.
+// Column ids double as the server's `sortBy` values (except `waiting`, which can't be sorted yet).
 const columns = column.columns([
+  column.accessor("awaitingReplySince", {
+    id: "waiting",
+    header: "Waiting",
+    enableSorting: false,
+    // Only open tickets wait; "Replied" means the next move is the sender's.
+    cell: ({ row: { original: ticket } }) =>
+      ticket.status !== "open" ? null : ticket.awaitingReplySince ? (
+        <WaitingTime since={ticket.awaitingReplySince} />
+      ) : (
+        <span className="text-muted-foreground">Replied</span>
+      ),
+  }),
   column.accessor("subject", {
     header: "Subject",
     cell: ({ row: { original: ticket } }) => <SubjectLink ticket={ticket} />,
@@ -123,7 +137,7 @@ const columns = column.columns([
   column.accessor("status", {
     header: "Status",
     cell: (info) => (
-      <Badge variant={ticketStatusVariant[info.getValue()]}>{ticketStatusLabel[info.getValue()]}</Badge>
+<TicketStatusBadge status={info.getValue()} />
     ),
   }),
   column.accessor("createdAt", {
@@ -269,9 +283,10 @@ export default function TicketsPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold">Tickets</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Tickets</h1>
         <p className="text-sm text-muted-foreground">
-          Support requests from email. Click a column heading to sort.
+          Every email to support becomes a ticket. Waiting shows how long the sender has had no
+          answer.
         </p>
       </div>
 
@@ -282,12 +297,19 @@ export default function TicketsPage() {
           <AlertDescription>{apiErrorMessage(error, "Failed to load tickets")}</AlertDescription>
         </Alert>
       ) : (
-        <div className="rounded-lg border bg-background">
+        <div className="overflow-hidden rounded-lg border bg-card">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-muted/50">
               {table.getHeaderGroups().map((group) => (
                 <TableRow key={group.id}>
                   {group.headers.map((header) => {
+                    if (!header.column.getCanSort()) {
+                      return (
+                        <TableHead key={header.id}>
+                          <table.FlexRender header={header} />
+                        </TableHead>
+                      );
+                    }
                     const sorted = header.column.getIsSorted();
                     const SortIcon = sorted === "asc" ? ArrowUp : sorted === "desc" ? ArrowDown : ArrowUpDown;
                     return (
