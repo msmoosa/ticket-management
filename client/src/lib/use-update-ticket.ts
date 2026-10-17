@@ -3,7 +3,8 @@ import { api } from "@/lib/api";
 import type { Ticket, TicketUpdate } from "@/lib/tickets";
 
 // Saves changes to a ticket with PATCH /api/tickets/:id. The saved ticket replaces the cached
-// detail, and cached list pages are marked stale so they show the change when next opened.
+// detail, and cached list pages and dashboard stats are marked stale so they show the change when
+// next opened.
 export function useUpdateTicket(ticketId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -13,9 +14,11 @@ export function useUpdateTicket(ticketId: string) {
     },
     onSuccess: (updated) => {
       queryClient.setQueryData(["tickets", "detail", ticketId], updated);
-      // List queries are keyed ["tickets", params]; detail and assignee keys use strings.
+      // List queries are keyed ["tickets", params] and stats ["tickets", "stats", params]; detail
+      // and assignee keys use other strings.
       void queryClient.invalidateQueries({
-        predicate: ({ queryKey }) => queryKey[0] === "tickets" && typeof queryKey[1] === "object",
+        predicate: ({ queryKey }) =>
+          queryKey[0] === "tickets" && (typeof queryKey[1] === "object" || queryKey[1] === "stats"),
       });
     },
   });

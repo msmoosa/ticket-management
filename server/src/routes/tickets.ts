@@ -115,6 +115,82 @@ ticketsRouter.get("/assignees", requireAuth, async (_req, res) => {
   res.json({ users });
 });
 
+export const DEFAULT_STATS_DAYS = 30;
+export const MAX_STATS_DAYS = 90;
+
+const statsQuerySchema = z.object({
+  days: z.coerce
+    .number()
+    .int()
+    .min(1, "Days must be at least 1")
+    .max(MAX_STATS_DAYS, `Days must be at most ${MAX_STATS_DAYS}`)
+    .default(DEFAULT_STATS_DAYS),
+  // IANA time zone the per-day counts are bucketed in (the viewer's), so "today" is their today.
+  tz: z
+    .string()
+    .default("UTC")
+    .refine(isTimeZone, "Unknown time zone"),
+});
+
+function isTimeZone(tz: string) {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Numbers for the dashboard: tickets per status and category, open tickets whose sender has
+// waited a day or more, and tickets received per day for the last `days` days (oldest first,
+// including days with none). Declared before `/:id`.
+ticketsRouter.get("/stats", requireAuth, async (req, res) => {
+  const parsed = statsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid query");
+  }
+  const { days, tz } = parsed.data;
+
+  const [byStatus, byCategory, waitingOverDay, perDay] = await Promise.all([
+    prisma.ticket.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.ticket.groupBy({ by: ["category"], _count: { _all: true } }),
+    prisma.ticket.count({
+      where: {
+        status: TicketStatus.open,
+        awaitingReplySince: { lte: new Date(Date.now() - DAY_MS) },
+      },
+    }),
+    // `createdAt` is a UTC timestamp without a zone: read it as UTC, then convert to `tz`.
+    prisma.$queryRaw<{ date: string; count: number }[]>`
+      WITH days AS (
+        SELECT (now() AT TIME ZONE ${tz}::text)::date - i AS day
+        FROM generate_series(0, ${days}::int - 1) AS i
+      )
+      SELECT to_char(days.day, 'YYYY-MM-DD') AS date, count(t.id)::int AS count
+      FROM days
+      LEFT JOIN "ticket" t
+        ON t."createdAt" >= now() AT TIME ZONE 'UTC' - make_interval(days => ${days}::int + 1)
+        AND ((t."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${tz}::text)::date = days.day
+      GROUP BY days.day
+      ORDER BY days.day`,
+  ]);
+
+  const status = Object.fromEntries(Object.values(TicketStatus).map((s) => [s, 0])) as Record<
+    TicketStatus,
+    number
+  >;
+  for (const row of byStatus) status[row.status] = row._count._all;
+
+  const category = Object.fromEntries(
+    [...Object.values(TicketCategory), "uncategorized"].map((c) => [c, 0]),
+  ) as Record<TicketCategory | "uncategorized", number>;
+  for (const row of byCategory) category[row.category ?? "uncategorized"] = row._count._all;
+
+  res.json({ status, category, waitingOverDay, perDay, days, tz });
+});
+
 const ticketDetailSelect = {
   id: true,
   subject: true,

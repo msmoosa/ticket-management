@@ -90,3 +90,15 @@ export type TicketReply = {
 
 /** Longest reply the server accepts. */
 export const maxReplyLength = 10_000;
+
+// Response of GET /api/tickets/stats, for the dashboard.
+export type TicketStats = {
+  status: Record<TicketStatus, number>;
+  category: Record<TicketCategoryFilter, number>;
+  /** Open tickets whose sender has waited a day or more. */
+  waitingOverDay: number;
+  /** Tickets received per day in `tz`, oldest first, ending today; days with none included. */
+  perDay: { date: string; count: number }[];
+  days: number;
+  tz: string;
+};

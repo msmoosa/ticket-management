@@ -8,7 +8,7 @@ import { Button } from "./components/ui/button.tsx";
 import { authClient } from "./lib/auth-client.ts";
 import { queryClient } from "./lib/query-client.ts";
 import { cn } from "./lib/utils.ts";
-import HomePage from "./pages/HomePage.tsx";
+import DashboardPage from "./pages/DashboardPage.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import NotFoundPage from "./pages/NotFoundPage.tsx";
 import TicketDetailPage from "./pages/TicketDetailPage.tsx";
@@ -92,7 +92,7 @@ export default function App() {
               <Route path="login" element={<LoginPage />} />
             </Route>
             <Route element={<RequireAuth />}>
-              <Route index element={<HomePage />} />
+              <Route index element={<DashboardPage />} />
               <Route path="tickets" element={<TicketsPage />} />
               <Route path="tickets/:id" element={<TicketDetailPage />} />
               <Route element={<RequireAdmin />}>
