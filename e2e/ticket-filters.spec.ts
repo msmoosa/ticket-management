@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import {
   expect,
   test,
@@ -17,6 +17,8 @@ const statusSelect = (page: Page) => page.getByRole("combobox", { name: "Status"
 const categorySelect = (page: Page) => page.getByRole("combobox", { name: "Category" });
 const clearFiltersButton = (page: Page) => page.getByRole("button", { name: "Clear filters" });
 const taggedRows = (page: Page, tag: string) => page.getByRole("row").filter({ hasText: tag });
+// Rows start with the Waiting cell, so row order is asserted on each row's subject link.
+const subjectLinks = (rows: Locator) => rows.getByRole("link");
 const noMatches = (page: Page) => page.getByRole("cell", { name: "No tickets match these filters." });
 const columnHeader = (page: Page, name: string) =>
   page.getByRole("columnheader", { name, exact: true });
@@ -92,29 +94,29 @@ test.describe("ticket list filters", () => {
     await expect(searchBox(page)).toHaveValue("");
     await expect(clearFiltersButton(page)).toHaveCount(0);
     const rows = taggedRows(page, tag);
-    await expect(rows).toHaveText([/^Invoice copy/, /^Course access/, /^Password reset/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Invoice copy/, /^Course access/, /^Password reset/]);
 
     // Subject (case-insensitive).
     await searchBox(page).fill(`password RESET [${tag}`);
     await expectTicketsUrl(page, { search: `password RESET [${tag}` });
-    await expect(rows).toHaveText([/^Password reset/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Password reset/]);
     await expect(clearFiltersButton(page)).toBeVisible();
 
     // Sender name.
     await searchBox(page).fill(`quincy ${nameTag}`);
     await expectTicketsUrl(page, { search: `quincy ${nameTag}` });
-    await expect(rows).toHaveText([/^Course access/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Course access/]);
 
     // Sender email (stored lowercased; the search is case-insensitive). Surrounding spaces are
     // trimmed before they reach the URL.
     await searchBox(page).fill(`  ZED-${emailTag.toUpperCase()}  `);
     await expectTicketsUrl(page, { search: `ZED-${emailTag.toUpperCase()}` });
-    await expect(rows).toHaveText([/^Invoice copy/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Invoice copy/]);
 
     // Emptying the box removes the filter and restores the list.
     await searchBox(page).fill("");
     await expectTicketsUrl(page, {});
-    await expect(rows).toHaveText([/^Invoice copy/, /^Course access/, /^Password reset/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Invoice copy/, /^Course access/, /^Password reset/]);
     await expect(clearFiltersButton(page)).toHaveCount(0);
   });
 
@@ -134,7 +136,7 @@ test.describe("ticket list filters", () => {
     await openTickets(page);
     await expectSelected(categorySelect(page), "All categories");
     const rows = taggedRows(page, tag);
-    await expect(rows).toHaveText([/^Refund/, /^Technical/, /^General/, /^Uncat/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Refund/, /^Technical/, /^General/, /^Uncat/]);
 
     const cases: [string, string, RegExp][] = [
       ["Uncategorized", "uncategorized", /^Uncat/],
@@ -145,13 +147,13 @@ test.describe("ticket list filters", () => {
     for (const [label, value, row] of cases) {
       await choose(categorySelect(page), page, label);
       await expectTicketsUrl(page, { category: value });
-      await expect(rows).toHaveText([row]);
+      await expect(subjectLinks(rows)).toHaveText([row]);
     }
 
     // Back to all categories drops the param.
     await choose(categorySelect(page), page, "All categories");
     await expectTicketsUrl(page, {});
-    await expect(rows).toHaveText([/^Refund/, /^Technical/, /^General/, /^Uncat/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Refund/, /^Technical/, /^General/, /^Uncat/]);
   });
 
   test("status filter shows only tickets with that status", async ({
@@ -169,7 +171,7 @@ test.describe("ticket list filters", () => {
     await openTickets(page);
     await expectSelected(statusSelect(page), "All statuses");
     const rows = taggedRows(page, tag);
-    await expect(rows).toHaveText([/^Closed one/, /^Resolved one/, /^Opened/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Closed one/, /^Resolved one/, /^Opened/]);
 
     const cases: [TicketStatus, string, RegExp][] = [
       ["open", "Open", /^Opened/],
@@ -179,9 +181,9 @@ test.describe("ticket list filters", () => {
     for (const [value, label, row] of cases) {
       await choose(statusSelect(page), page, label);
       await expectTicketsUrl(page, { status: value });
-      await expect(rows).toHaveText([row]);
+      await expect(subjectLinks(rows)).toHaveText([row]);
       // The status column agrees with the filter.
-      await expect(rows.getByRole("cell").nth(3)).toHaveText(label);
+      await expect(rows.getByRole("cell").nth(4)).toHaveText(label);
     }
 
     await choose(statusSelect(page), page, "All statuses");
@@ -209,12 +211,12 @@ test.describe("ticket list filters", () => {
 
     await choose(statusSelect(page), page, "Open");
     await expectTicketsUrl(page, { status: "open" });
-    await expect(rows).toHaveText([/^Delta/, /^Alpha/, /^Charlie/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Delta/, /^Alpha/, /^Charlie/]);
 
     // Status AND category.
     await choose(categorySelect(page), page, "General question");
     await expectTicketsUrl(page, { status: "open", category: "general_question" });
-    await expect(rows).toHaveText([/^Alpha/, /^Charlie/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Alpha/, /^Charlie/]);
 
     // Status AND category AND search.
     await searchBox(page).fill(`Charlie [${tag}`);
@@ -223,12 +225,12 @@ test.describe("ticket list filters", () => {
       category: "general_question",
       search: `Charlie [${tag}`,
     });
-    await expect(rows).toHaveText([/^Charlie/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Charlie/]);
     // From here on, search for the whole tag: the list is paginated, so sorting the unsearched
     // list could push this test's tickets off page 1 when the DB holds other tickets.
     await searchBox(page).fill(tag);
     await expectTicketsUrl(page, { status: "open", category: "general_question", search: tag });
-    await expect(rows).toHaveText([/^Alpha/, /^Charlie/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Alpha/, /^Charlie/]);
 
     // Sorting keeps the filters.
     await columnHeader(page, "Subject").getByRole("button", { name: "Subject" }).click();
@@ -240,7 +242,7 @@ test.describe("ticket list filters", () => {
       sortOrder: "asc",
     });
     await expect(columnHeader(page, "Subject")).toHaveAttribute("aria-sort", "ascending");
-    await expect(rows).toHaveText([/^Alpha/, /^Charlie/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Alpha/, /^Charlie/]);
     await expectSelected(statusSelect(page), "Open");
     await expectSelected(categorySelect(page), "General question");
 
@@ -253,7 +255,7 @@ test.describe("ticket list filters", () => {
       sortOrder: "asc",
     });
     await expect(columnHeader(page, "Subject")).toHaveAttribute("aria-sort", "ascending");
-    await expect(rows).toHaveText([/^Alpha/, /^Bravo/, /^Charlie/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Alpha/, /^Bravo/, /^Charlie/]);
   });
 
   test("a deep link with filters pre-applies them", async ({
@@ -283,7 +285,7 @@ test.describe("ticket list filters", () => {
     await expect(searchBox(page)).toHaveValue(tag);
     await expect(columnHeader(page, "Subject")).toHaveAttribute("aria-sort", "ascending");
     await expect(clearFiltersButton(page)).toBeVisible();
-    await expect(taggedRows(page, tag)).toHaveText([/^Yankee/, /^Zulu/]);
+    await expect(subjectLinks(taggedRows(page, tag))).toHaveText([/^Yankee/, /^Zulu/]);
     // Loading the page doesn't rewrite the URL.
     await expectTicketsUrl(page, Object.fromEntries(query));
   });
@@ -317,11 +319,11 @@ test.describe("ticket list filters", () => {
 
     await openTickets(page, "?sortBy=subject&sortOrder=asc");
     const rows = taggedRows(page, tag);
-    await expect(rows).toHaveText([/^Alpha/, /^Bravo/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Alpha/, /^Bravo/]);
     await expect(clearFiltersButton(page)).toHaveCount(0);
 
     await searchBox(page).fill(tag);
-    await expect(rows).toHaveText([/^Alpha/, /^Bravo/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Alpha/, /^Bravo/]);
     await choose(statusSelect(page), page, "Closed");
     await choose(categorySelect(page), page, "Refund");
     await expectTicketsUrl(page, {
@@ -343,7 +345,7 @@ test.describe("ticket list filters", () => {
     await expect(clearFiltersButton(page)).toHaveCount(0);
     await expect(noMatches(page)).toHaveCount(0);
     await expect(columnHeader(page, "Subject")).toHaveAttribute("aria-sort", "ascending");
-    await expect(rows).toHaveText([/^Alpha/, /^Bravo/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Alpha/, /^Bravo/]);
   });
 
   test("browser back returns to the previous filter state", async ({
@@ -364,11 +366,11 @@ test.describe("ticket list filters", () => {
 
     await choose(statusSelect(page), page, "Open");
     await expectTicketsUrl(page, { status: "open" });
-    await expect(rows).toHaveText([/^Open uncategorized/, /^Open general/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Open uncategorized/, /^Open general/]);
 
     await choose(categorySelect(page), page, "Uncategorized");
     await expectTicketsUrl(page, { status: "open", category: "uncategorized" });
-    await expect(rows).toHaveText([/^Open uncategorized/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Open uncategorized/]);
 
     await searchBox(page).fill(`nothing-${crypto.randomUUID()}`);
     await expect(noMatches(page)).toBeVisible();
@@ -376,13 +378,13 @@ test.describe("ticket list filters", () => {
     await page.goBack();
     await expectTicketsUrl(page, { status: "open", category: "uncategorized" });
     await expect(searchBox(page)).toHaveValue("");
-    await expect(rows).toHaveText([/^Open uncategorized/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Open uncategorized/]);
 
     await page.goBack();
     await expectTicketsUrl(page, { status: "open" });
     await expectSelected(statusSelect(page), "Open");
     await expectSelected(categorySelect(page), "All categories");
-    await expect(rows).toHaveText([/^Open uncategorized/, /^Open general/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Open uncategorized/, /^Open general/]);
 
     await page.goBack();
     await expectTicketsUrl(page, {});
@@ -392,6 +394,6 @@ test.describe("ticket list filters", () => {
     await page.goForward();
     await expectTicketsUrl(page, { status: "open" });
     await expectSelected(statusSelect(page), "Open");
-    await expect(rows).toHaveText([/^Open uncategorized/, /^Open general/]);
+    await expect(subjectLinks(rows)).toHaveText([/^Open uncategorized/, /^Open general/]);
   });
 });

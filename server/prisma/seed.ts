@@ -1,4 +1,6 @@
-// Run with `bun run db:seed` (also runs on `prisma migrate reset`). Safe to re-run.
+// Run with `bun run db:seed` (also runs on `prisma migrate reset`). Safe to re-run: an existing
+// admin is left as is (its password isn't changed). With `--if-configured` (used by `db:deploy` on
+// every production deploy) it does nothing when SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD are unset.
 import { auth } from "../src/auth.ts";
 import { prisma } from "../src/db.ts";
 import { Role } from "../src/generated/prisma/enums.ts";
@@ -8,6 +10,10 @@ const password = process.env.SEED_ADMIN_PASSWORD;
 const name = process.env.SEED_ADMIN_NAME ?? "Admin";
 
 if (!email || !password) {
+  if (process.argv.includes("--if-configured")) {
+    console.log("SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD not set; skipping the admin seed");
+    process.exit(0);
+  }
   console.error("Set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD in server/.env");
   process.exit(1);
 }

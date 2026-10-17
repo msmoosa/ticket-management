@@ -58,13 +58,15 @@ async function apiAssign(api: APIRequestContext, ticketId: string, assignedToId:
   expect(res.status(), `assign ticket: ${await res.text()}`).toBe(200);
 }
 
-/** A ticket's row on the list page; cells are Subject, From, Category, Status, Received. */
+/** A ticket's row on the list page; cells are Waiting, Subject, From, Category, Status, Received. */
 const ticketRow = (page: Page, ticket: Ticket) =>
   page.getByRole("row").filter({ has: page.getByRole("link", { name: ticket.subject }) });
 
 async function expectRow(page: Page, ticket: Ticket, category: string, status: string) {
   const cells = ticketRow(page, ticket).getByRole("cell");
-  await expect(cells).toHaveText([ticket.subject, ticket.fromEmail, category, status, /.+/]);
+  // Only open tickets show a wait (a fresh ticket's is minutes); others leave the cell empty.
+  const waiting = status === "Open" ? /^\d+m$/ : "";
+  await expect(cells).toHaveText([waiting, ticket.subject, ticket.fromEmail, category, status, /.+/]);
 }
 
 test.describe("changing a ticket's status and category", () => {

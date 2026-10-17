@@ -21,6 +21,8 @@ Run from the repo root. Bun lives in `~/.bun/bin` — if `bun` is not found, use
 - Seed (run in `server/`): `bun run db:seed` creates the admin user from `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (dev default: `admin@example.com` / `password123`); safe to re-run
 - Sample tickets (run in `server/`): `bun run db:seed:tickets` adds 100 realistic tickets to the dev DB (`prisma/seed-tickets.ts`; mixed statuses, categories incl. uncategorized, senders, last 90 days); skips ones already there by `messageId`
 - Test DB (run in `server/`): `bun run db:test:reset` applies migrations to `helpdesk_test` (creating it if needed), truncates every table, and seeds the admin. Run it once on a fresh machine and after adding migrations; `test:e2e` runs it automatically
+- Deploy migrations (run in `server/`, used by Railway's pre-deploy): `bun run db:deploy` runs `prisma migrate deploy`, then the admin seed only if `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` are set (`--if-configured`)
+- Production image: `docker build -t ticket-management .` (see Deployment)
 - Better Auth schema (run in `server/`): `bun run auth:generate` rewrites the auth models in `prisma/schema.prisma` — rerun after changing auth plugins, check `git diff` that other models survived, then `db:migrate`
 
 Always run `bun run typecheck` and `bun run test` after changes.
@@ -41,7 +43,7 @@ Bun workspaces monorepo (`client`, `server`).
   - Data fetching: TanStack Query (`useQuery` / `useMutation`) with the axios instance `api` from `src/lib/api.ts` (base URL `/api`; pass the query `signal`). `apiErrorMessage(err, fallback)` extracts the server's `{ error }`. The shared `queryClient` (`src/lib/query-client.ts`) skips retries on 4xx and is cleared on sign-out. Don't call `fetch` directly; Better Auth calls still go through `authClient`.
 - `server/` — Express 5 running directly on Bun (no build step)
   - `src/app.ts` — `createApp()` builds the Express app (used by both `index.ts` and tests)
-  - `src/index.ts` — starts the server on `PORT`
+  - `src/index.ts` — starts the server on `PORT` (graceful shutdown on SIGTERM)
   - `src/routes/` — one `Router` per resource, mounted under `/api/<resource>` in `app.ts`
   - `src/middleware/error-handler.ts` — 404 handler, JSON error handler, `HttpError` class
   - `src/auth.ts` — Better Auth instance; `src/permissions.ts` — admin-plugin access control keyed by the `Role` enum
@@ -186,6 +188,17 @@ Email sent to the support address becomes a ticket. No email provider is wired u
 - Local testing: with `bun run dev` running, `bun run email:simulate` (in `server/`) posts a sample email; pass `--from`, `--name`, `--subject`, `--text` or `--message-id` to vary it, and `--in-reply-to <message-id>` (with the same `--from`) to send a reply into that ticket's thread.
 - `Ticket` (`prisma/schema.prisma`): `subject`, plain-text `body`, `fromEmail`, `fromName`, unique `messageId`, `status` (`TicketStatus` enum: `open` | `resolved` | `closed`, default `open`). `category` is the nullable `TicketCategory` enum (`general_question` | `technical_question` | `refund_request`; labels in `client/src/lib/tickets.ts`). Inbound email leaves it null (shown as "Uncategorized") until an agent sets it on the detail page (AI classification is planned). `assignedToId` (nullable FK to `User`, `onDelete: SetNull`) is who works the ticket; soft-deleting a user unassigns their tickets (in `DELETE /api/users/:id`). `TicketReply` (`ticket_reply`: `ticketId` cascade-deleted with the ticket, plain-text `body`, nullable `authorId` with `onDelete: SetNull`, `createdAt`) holds the reply thread: `sender` (`TicketReplySender`: `agent` | `customer`), unique nullable `messageId` for emailed replies. The `User.assignedTickets` and `User.ticketReplies` back-relations aren't Better Auth fields — check they survive `auth:generate`.
 
+## Deployment
+
+Railway, one service (README → Deployment has the setup steps and variables).
+
+- `Dockerfile` (repo root, multi-stage): builds the client and generates the Prisma client, installs the server's production deps only (the `deps` stage rewrites the root `package.json` to drop the client workspace, since `bun install --filter` still installs every workspace), and runs `bun src/index.ts` from `server/` as the `bun` user. `.dockerignore` keeps `.env` files, `node_modules` and `e2e/` out.
+- `CLIENT_DIST_DIR` (set in the image) makes `createApp()` serve the built client: `/assets/*` cached immutably, every other non-`/api` GET returns `index.html` (no-cache) so client routes work on reload; unknown `/api` paths and missing assets still get the JSON 404. Tested in `server/src/serve-client.test.ts`.
+- `railway.json`: Dockerfile builder, pre-deploy `bun run db:deploy`, healthcheck `/api/health` (checks the DB). `prisma` is a server *dependency* (not dev) because migrations run in the production image.
+- Behind Railway's proxy set `CLIENT_IP_HEADER=x-real-ip` (Better Auth `advanced.ipAddress.ipAddressHeaders`); without it sign-in rate limiting shares one bucket across all clients. Railway sends `X-Real-IP`, not `X-Forwarded-For`.
+- `src/index.ts` closes the server and disconnects Prisma on SIGTERM/SIGINT.
+- Any new env var must be added to the Railway variables table in README.md and to `server/.env.example`.
+
 ## Planned but not yet added
 
-Claude API integration, a SendGrid/Mailgun provider for inbound (behind the webhook above) and outbound email, Docker. Follow `tech-stack.md` when adding these, and update this file when they land.
+Claude API integration, a SendGrid/Mailgun provider for inbound (behind the webhook above) and outbound email, Docker Compose for local development. Follow `tech-stack.md` when adding these, and update this file when they land.

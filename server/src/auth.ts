@@ -14,6 +14,12 @@ export const auth = betterAuth({
   emailAndPassword: { enabled: true, disableSignUp: true },
   // The Vite dev server proxies /api, so browser requests carry the client's Origin.
   trustedOrigins: process.env.CLIENT_ORIGIN ? [process.env.CLIENT_ORIGIN] : [],
+  // Behind a reverse proxy, the header holding the client's IP (Railway: x-real-ip). Rate
+  // limiting is per IP; without it every client would share one bucket. Only set this when the
+  // proxy always overwrites the header, or clients could spoof it.
+  advanced: process.env.CLIENT_IP_HEADER
+    ? { ipAddress: { ipAddressHeaders: [process.env.CLIENT_IP_HEADER] } }
+    : undefined,
   user: {
     additionalFields: {
       // Soft deletion (DELETE /api/users/:id): set instead of removing the row. Not client-settable.

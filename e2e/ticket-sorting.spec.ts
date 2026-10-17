@@ -1,4 +1,4 @@
-import type { Page, Request } from "@playwright/test";
+import type { Locator, Page, Request } from "@playwright/test";
 import { expect, test, ticketsHeading, type Ticket, type TicketCategory } from "./fixtures.ts";
 
 // Sorting is done by the server (GET /api/tickets?sortBy=…&sortOrder=…); the page only tracks
@@ -11,6 +11,8 @@ const columnHeader = (page: Page, name: string) =>
 const sortButton = (page: Page, name: string) =>
   columnHeader(page, name).getByRole("button", { name, exact: true });
 const taggedRows = (page: Page, tag: string) => page.getByRole("row").filter({ hasText: tag });
+// Rows start with the Waiting cell, so row order is asserted on each row's subject link.
+const subjectLinks = (rows: Locator) => rows.getByRole("link");
 const COLUMNS = ["Subject", "From", "Category", "Status", "Received"] as const;
 
 /** Assert which heading is sorted (and in which direction); every other heading has no aria-sort. */
@@ -81,7 +83,7 @@ test.describe("ticket list sorting", () => {
     await request;
 
     await expectSorted(page, "Received", "descending");
-    await expect(taggedRows(page, tag)).toHaveText([/^Alpha/, /^Charlie/, /^Bravo/]);
+    await expect(subjectLinks(taggedRows(page, tag))).toHaveText([/^Alpha/, /^Charlie/, /^Bravo/]);
   });
 
   test("clicking Subject sorts A to Z, and clicking again Z to A", async ({
@@ -90,20 +92,20 @@ test.describe("ticket list sorting", () => {
   }) => {
     const tag = await createSubjectTickets(createTicket);
     await openTickets(page, tag);
-    await expect(taggedRows(page, tag)).toHaveText([/^Alpha/, /^Charlie/, /^Bravo/]);
+    await expect(subjectLinks(taggedRows(page, tag))).toHaveText([/^Alpha/, /^Charlie/, /^Bravo/]);
 
     await clickSort(page, "Subject", "subject", "asc");
     await expectSorted(page, "Subject", "ascending");
-    await expect(taggedRows(page, tag)).toHaveText([/^Alpha/, /^Bravo/, /^Charlie/]);
+    await expect(subjectLinks(taggedRows(page, tag))).toHaveText([/^Alpha/, /^Bravo/, /^Charlie/]);
 
     await clickSort(page, "Subject", "subject", "desc");
     await expectSorted(page, "Subject", "descending");
-    await expect(taggedRows(page, tag)).toHaveText([/^Charlie/, /^Bravo/, /^Alpha/]);
+    await expect(subjectLinks(taggedRows(page, tag))).toHaveText([/^Charlie/, /^Bravo/, /^Alpha/]);
 
     // A third click flips back rather than clearing the sort.
     await clickSort(page, "Subject", "subject", "asc");
     await expectSorted(page, "Subject", "ascending");
-    await expect(taggedRows(page, tag)).toHaveText([/^Alpha/, /^Bravo/, /^Charlie/]);
+    await expect(subjectLinks(taggedRows(page, tag))).toHaveText([/^Alpha/, /^Bravo/, /^Charlie/]);
   });
 
   test("clicking Received after another column returns to newest first", async ({
@@ -115,17 +117,17 @@ test.describe("ticket list sorting", () => {
 
     await clickSort(page, "Subject", "subject", "asc");
     await expectSorted(page, "Subject", "ascending");
-    await expect(taggedRows(page, tag)).toHaveText([/^Alpha/, /^Bravo/, /^Charlie/]);
+    await expect(subjectLinks(taggedRows(page, tag))).toHaveText([/^Alpha/, /^Bravo/, /^Charlie/]);
 
     // Received starts descending on first click.
     await clickSort(page, "Received", "createdAt", "desc");
     await expectSorted(page, "Received", "descending");
-    await expect(taggedRows(page, tag)).toHaveText([/^Alpha/, /^Charlie/, /^Bravo/]);
+    await expect(subjectLinks(taggedRows(page, tag))).toHaveText([/^Alpha/, /^Charlie/, /^Bravo/]);
 
     // And flips to oldest first on the next.
     await clickSort(page, "Received", "createdAt", "asc");
     await expectSorted(page, "Received", "ascending");
-    await expect(taggedRows(page, tag)).toHaveText([/^Bravo/, /^Charlie/, /^Alpha/]);
+    await expect(subjectLinks(taggedRows(page, tag))).toHaveText([/^Bravo/, /^Charlie/, /^Alpha/]);
   });
 
   test("category sort keeps Uncategorized tickets last in both directions", async ({
@@ -154,7 +156,7 @@ test.describe("ticket list sorting", () => {
     // Enum declaration order: general_question, technical_question, refund_request.
     await clickSort(page, "Category", "category", "asc");
     await expectSorted(page, "Category", "ascending");
-    await expect(rows).toHaveText([
+    await expect(subjectLinks(rows)).toHaveText([
       /^General/,
       /^Technical/,
       /^Refund/,
@@ -164,7 +166,7 @@ test.describe("ticket list sorting", () => {
 
     await clickSort(page, "Category", "category", "desc");
     await expectSorted(page, "Category", "descending");
-    await expect(rows).toHaveText([
+    await expect(subjectLinks(rows)).toHaveText([
       /^Refund/,
       /^Technical/,
       /^General/,
@@ -176,7 +178,7 @@ test.describe("ticket list sorting", () => {
     const categoryCells = await page
       .getByRole("row")
       .filter({ has: page.getByRole("cell") })
-      .locator("td:nth-child(3)")
+      .locator("td:nth-child(4)")
       .allTextContents();
     const firstUncategorized = categoryCells.indexOf("Uncategorized");
     expect(firstUncategorized).toBeGreaterThanOrEqual(0);

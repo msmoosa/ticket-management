@@ -12,6 +12,7 @@
     "db:migrate": "bun --env-file=.env --bun prisma migrate dev",
     "db:studio": "bun --env-file=.env --bun prisma studio",
     "db:seed": "bun --env-file=.env --bun prisma db seed",
+    "db:deploy": "bun --bun prisma migrate deploy && bun prisma/seed.ts --if-configured",
     "db:seed:tickets": "bun --env-file=.env prisma/seed-tickets.ts",
     "db:test:reset": "bun --env-file=.env.test prisma/reset-test-db.ts",
     "email:simulate": "bun --env-file=.env scripts/simulate-inbound-email.ts",
@@ -22,12 +23,12 @@
     "@prisma/client": "7.10.0",
     "better-auth": "1.7.6",
     "express": "^5.2.1",
+    "prisma": "7.10.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",
     "@types/express": "^5.0.6",
-    "prisma": "7.10.0",
     "typescript": "^7.0.2"
   }
 }

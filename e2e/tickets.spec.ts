@@ -53,9 +53,12 @@ test.describe("ticket list page", () => {
     await page.goto("/tickets");
     await expect(ticketsHeading(page)).toBeVisible();
     await expect(
-      page.getByText("Support requests from email. Click a column heading to sort."),
+      page.getByText(
+        "Every email to support becomes a ticket. Waiting shows how long the sender has had no answer.",
+      ),
     ).toBeVisible();
     await expect(page.getByRole("columnheader")).toHaveText([
+      "Waiting",
       "Subject",
       "From",
       "Category",
@@ -65,7 +68,11 @@ test.describe("ticket list page", () => {
 
     const rows = ticketRows(page, tag);
     await expect(rows).toHaveCount(3);
-    await expect(rows).toHaveText([/Video won't play/, /Refund request/, /Cannot log in/]);
+    await expect(rows.getByRole("link")).toHaveText([
+      /Video won't play/,
+      /Refund request/,
+      /Cannot log in/,
+    ]);
 
     const expectRow = async (
       index: number,
@@ -73,18 +80,20 @@ test.describe("ticket list page", () => {
       from: { name: string | null; email: string },
     ) => {
       const cells = rows.nth(index).getByRole("cell");
-      await expect(cells).toHaveCount(5);
-      await expect(cells.nth(0)).toHaveText(ticket.subject);
+      await expect(cells).toHaveCount(6);
+      // A new ticket has been waiting for a reply for under an hour (ticket-waiting.spec.ts).
+      await expect(cells.nth(0)).toHaveText(/^\d+m$/);
+      await expect(cells.nth(1)).toHaveText(ticket.subject);
       if (from.name) {
-        await expect(cells.nth(1).getByText(from.name, { exact: true })).toBeVisible();
-        await expect(cells.nth(1).getByText(from.email, { exact: true })).toBeVisible();
+        await expect(cells.nth(2).getByText(from.name, { exact: true })).toBeVisible();
+        await expect(cells.nth(2).getByText(from.email, { exact: true })).toBeVisible();
       } else {
-        await expect(cells.nth(1)).toHaveText(from.email);
+        await expect(cells.nth(2)).toHaveText(from.email);
       }
       // Webhook tickets aren't classified yet.
-      await expect(cells.nth(2)).toHaveText("Uncategorized");
-      await expect(cells.nth(3)).toHaveText("Open");
-      await expect(cells.nth(4)).toHaveText(await formatReceived(page, ticket.createdAt));
+      await expect(cells.nth(3)).toHaveText("Uncategorized");
+      await expect(cells.nth(4)).toHaveText("Open");
+      await expect(cells.nth(5)).toHaveText(await formatReceived(page, ticket.createdAt));
     };
 
     // The sender address is stored lowercased.
@@ -115,7 +124,7 @@ test.describe("ticket list page", () => {
 
     await page.goto("/tickets");
     await expect(ticketsHeading(page)).toBeVisible();
-    const categoryIndex = 2;
+    const categoryIndex = 3;
     await expect(page.getByRole("columnheader").nth(categoryIndex)).toHaveText("Category");
     for (const [i, [, label]] of cases.entries()) {
       const row = page.getByRole("row").filter({ hasText: tickets[i]!.subject });
@@ -216,6 +225,8 @@ test.describe("GET /api/tickets", () => {
         status: "open",
         category: null,
         createdAt: t.createdAt,
+        // A new ticket is waiting for a reply (ticket-waiting.spec.ts checks the value).
+        awaitingReplySince: expect.any(String),
       })),
     );
 
@@ -255,6 +266,7 @@ test.describe("GET /api/tickets", () => {
       status: "open",
       category: "refund_request",
       createdAt: ticket.createdAt,
+      awaitingReplySince: expect.any(String),
     });
   });
 

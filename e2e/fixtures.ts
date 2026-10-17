@@ -112,12 +112,20 @@ export interface Ticket {
   createdAt: string;
 }
 
+/** A ticket as listed by GET /api/tickets (and GET /api/tickets/:id). */
+export interface ListedTicket extends Ticket {
+  /** When the sender started waiting for an answer; null once an agent has replied. */
+  awaitingReplySince: string | null;
+}
+
 export interface InboundEmail {
   from?: string;
   fromName?: string;
   subject?: string;
   text?: string;
   messageId?: string;
+  /** Message-ID this email answers: threads it onto that ticket as a customer reply. */
+  inReplyTo?: string;
 }
 
 /** The env the e2e API server runs with (server/.env.test). */
@@ -156,6 +164,16 @@ if (op.kind === "delete") {
 } else if (op.kind === "setCategory") {
   const rows = await sql\`UPDATE "ticket" SET "category" = \${op.category}::"TicketCategory" WHERE "id" = \${op.id} RETURNING "id"\`;
   if (rows.length !== 1) throw new Error("No ticket " + op.id);
+} else if (op.kind === "setTimes") {
+  // Prisma stores UTC in "timestamp without time zone" columns.
+  if ("createdAt" in op) {
+    const rows = await sql\`UPDATE "ticket" SET "createdAt" = (\${op.createdAt}::timestamptz AT TIME ZONE 'UTC') WHERE "id" = \${op.id} RETURNING "id"\`;
+    if (rows.length !== 1) throw new Error("No ticket " + op.id);
+  }
+  if ("awaitingReplySince" in op) {
+    const rows = await sql\`UPDATE "ticket" SET "awaitingReplySince" = (\${op.awaitingReplySince}::timestamptz AT TIME ZONE 'UTC') WHERE "id" = \${op.id} RETURNING "id"\`;
+    if (rows.length !== 1) throw new Error("No ticket " + op.id);
+  }
 } else if (op.kind === "setStatus") {
   const rows = await sql\`UPDATE "ticket" SET "status" = \${op.status}::"TicketStatus" WHERE "id" = \${op.id} RETURNING "id"\`;
   if (rows.length !== 1) throw new Error("No ticket " + op.id);
@@ -166,7 +184,11 @@ await sql.close();
 type TicketDbOp =
   | { kind: "delete"; ids: string[] }
   | { kind: "setCategory"; id: string; category: TicketCategory | null }
-  | { kind: "setStatus"; id: string; status: TicketStatus };
+  | { kind: "setStatus"; id: string; status: TicketStatus }
+  | ({ kind: "setTimes"; id: string } & TicketTimes);
+
+/** Timestamps to overwrite on a ticket (ISO strings; null clears `awaitingReplySince`). */
+export type TicketTimes = { createdAt?: string; awaitingReplySince?: string | null };
 
 function runTicketDbOp(databaseUrl: string, op: TicketDbOp) {
   execFileSync("bun", ["-e", TICKET_DB_SCRIPT], {
@@ -188,6 +210,8 @@ type Fixtures = {
   /**
    * Create a ticket by posting an email to the inbound email webhook (as the email provider
    * would). Defaults give a unique subject, sender and Message-ID. Deleted again after the test.
+   * With `inReplyTo` (and the ticket's `from`), the email is threaded onto that ticket as a
+   * customer reply instead, and the existing ticket is returned.
    */
   createTicket: (email?: InboundEmail) => Promise<Ticket>;
   /**
@@ -200,6 +224,11 @@ type Fixtures = {
    * tickets this test created.
    */
   setTicketStatus: (id: string, status: TicketStatus) => void;
+  /**
+   * Overwrite a ticket's `createdAt` / `awaitingReplySince` directly in the test DB (to make it
+   * look older than it is; no API sets them). Only use on tickets this test created.
+   */
+  setTicketTimes: (id: string, times: TicketTimes) => void;
   /** A standalone API context signed in as the seeded admin (separate from `page`'s cookies). */
   adminApi: APIRequestContext;
   /** Create a user (default role: agent) via the admin API; removed again after the test. */
@@ -233,6 +262,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
           subject: email.subject ?? `Help needed ${tag}`,
           text: email.text ?? "I can't access my course materials.",
           messageId: email.messageId ?? `<e2e-${tag}@example.com>`,
+          inReplyTo: email.inReplyTo,
         },
       });
       expect(res.status(), `create ticket: ${await res.text()}`).toBe(201);
@@ -251,6 +281,10 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
 
   setTicketStatus: async ({ serverEnv }, use) => {
     await use((id, status) => runTicketDbOp(serverEnv.DATABASE_URL, { kind: "setStatus", id, status }));
+  },
+
+  setTicketTimes: async ({ serverEnv }, use) => {
+    await use((id, times) => runTicketDbOp(serverEnv.DATABASE_URL, { kind: "setTimes", id, ...times }));
   },
 
   adminApi: async ({ baseURL }, use) => {
